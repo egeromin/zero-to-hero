@@ -17,12 +17,12 @@ from graphviz import Digraph
 class Value:
     def __init__(
         self,
-        data: float,
+        data: float | int,
         name: str = "",
         op: str = "",
         children: list["Value"] | None = None,
     ):
-        self.data = data
+        self.data = float(data)
         self.op = op
         self.name = name
         self.grad = 0.0
