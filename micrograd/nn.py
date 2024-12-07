@@ -36,7 +36,6 @@ class MLP:
             [Neuron(n_inputs) for _ in range(sz_layer)]
             for n_inputs, sz_layer in zip(all_layers_n_inputs, all_sz_layers)
         ]
-        print(self.neurons)
 
     def __call__(self, inputs: list[Value]) -> list[Value]:
         """
@@ -50,8 +49,6 @@ class MLP:
         for layer in self.neurons:
             layer_output = [neuron(intermediate_values[-1]) for neuron in layer]
             intermediate_values.append(layer_output)
-
-        print(intermediate_values)
 
         if len(intermediate_values[-1]) != self.n_outputs:
             raise RuntimeError(
