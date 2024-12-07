@@ -53,7 +53,7 @@ class Value:
         return Value(data=tanh, op="tanh", children=[self])
 
 
-@dataclass
+@dataclass(frozen=True, eq=True)
 class NodeId:
     from_id: str
     to_id: str
@@ -78,13 +78,20 @@ class NodeId:
 
 
 def draw_graph(value: Value):
-    dot = Digraph(comment="Operations Graph")
+    dot = Digraph(comment="Operations Graph", strict=True)
     dot.attr(rankdir="LR")
+
+    drawn_nodes = set()
+    drawn_edges = set()
 
     def draw_node(node: Value):
         """Draw the value in graphviz. If it's an op-node, this is two
         nodes, one for the op, connected by an edge to the other one, for the data."""
         node_ids = NodeId.from_value(node)
+        if node_ids in drawn_nodes:
+            print(f"Node {node} already drawn, skipping")
+            drawn_nodes.add(node_ids)
+            return
 
         dot.node(
             name=node_ids.from_id, label=f"{node.name} | {node.data:.4f}", shape="box"
@@ -96,10 +103,15 @@ def draw_graph(value: Value):
     nodes_to_draw = deque([value])
     while nodes_to_draw:
         # Draw the node and edges to its children.
+        # The child nodes may be drawn at a later point in time.
         node = nodes_to_draw.popleft()
         draw_node(node)
         for child in node.children:
-            dot.edge(NodeId.from_value(child).from_id, NodeId.from_value(node).to_id)
+            edge = (NodeId.from_value(child).from_id, NodeId.from_value(node).to_id)
+            if edge not in drawn_edges:
+                dot.edge(*edge)
+                drawn_edges.add(edge)
+
             nodes_to_draw.append(child)
 
     dot.render("rendered_graph", format="png", cleanup=True, view=True)

@@ -62,8 +62,8 @@ class MLP:
 
 
 def main():
-    mlp = MLP(2, [2], 1)
-    inputs = [Value(2, name="x_0"), Value(3, name="x_1")]
+    mlp = MLP(3, [2, 3], 1)
+    inputs = [Value(2, name="x_0"), Value(3, name="x_1"), Value(1, name="x_3")]
     output = mlp(inputs)[0]
     draw_graph(output)
 
