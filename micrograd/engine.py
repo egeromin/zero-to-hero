@@ -1,7 +1,5 @@
-import uuid
 from dataclasses import dataclass
-from typing import Mapping
-from collections import deque, defaultdict
+from collections import deque
 
 from graphviz import Digraph
 
