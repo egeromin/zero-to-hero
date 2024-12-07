@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 from collections import deque
+import math
 
 from graphviz import Digraph
 
@@ -37,6 +38,18 @@ class Value:
 
     def __radd__(self, other):
         return self + other
+
+    def __mul__(self, other):
+        if isinstance(other, (int, float)):
+            other = Value(data=other, name="scalar")
+        return Value(self.data * other.data, op="*", children=[self, other])
+
+    def __rmul__(self, other):
+        return self * other
+
+    def tanh(self):
+        tanh = math.tanh(self.data)  # e^x - 1 / e^x + 1
+        return Value(data=tanh, op="tanh", children=[self])
 
 
 @dataclass
@@ -103,7 +116,15 @@ def main():
     e = 2 + d
     e.name = "e"
 
-    draw_graph(e)
+    f = e * 7
+    f.name = "f"
+    g = 3 * f
+    g.name = "g"
+
+    t = g.tanh()
+    t.name = "t"
+
+    draw_graph(t)
 
 
 if __name__ == "__main__":
