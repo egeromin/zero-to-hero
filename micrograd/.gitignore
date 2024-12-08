@@ -9,5 +9,8 @@ wheels/
 # Virtual environments
 .venv
 
+# testing
+.hypothesis/
+
 # Ad-hoc
 rendered_graph.png

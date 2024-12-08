@@ -3,6 +3,7 @@ import torch.nn as nn
 from engine import Value
 from nn import MLP
 import pytest
+from hypothesis import given, strategies as st, settings
 
 
 # Define the MLP
@@ -30,12 +31,16 @@ class MLPTorch(nn.Module):
         return x
 
 
-@pytest.mark.parametrize(
-    "inputs", [(2, 3), (5, 10), (7, 8), (0.1, 0.9), (100, 200), (80, 20), (7, 2)]
+# Bound the inputs and outputs for our test case, since in our custom MLP library,
+# we do not handle underflow and overflow.
+@settings(max_examples=100)
+@given(
+    st.floats(min_value=-1e4, max_value=1e4), st.floats(min_value=-1e4, max_value=1e4)
 )
-def test_mlp_torch(inputs):
+def test_mlp_torch(x, y):
+    print(f"Testing with {x=}, {y=}")
     mlp = MLP(2, [3, 3], 1)
-    inputs = [Value(inputs[0], name="x_0"), Value(inputs[1], name="x_1")]
+    inputs = [Value(x, name="x_0"), Value(y, name="x_1")]
     output = mlp(inputs)[0].data
 
     # Create the model and test it
