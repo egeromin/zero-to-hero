@@ -1,4 +1,3 @@
-
 import torch
 
 import pytest
@@ -88,7 +87,7 @@ def test_concatenation(a, b, c):
     a_eng = Value(a)
     b_eng = Value(b)
     c_eng = Value(c)
-    x_eng = (( (a_eng + 1) * b_eng ).tanh() * (a_eng + c_eng).tanh() + b_eng).tanh()
+    x_eng = (((a_eng + 1) * b_eng).tanh() * (a_eng + c_eng).tanh() + b_eng).tanh()
 
     # 2. Pytorch implementation
     a_torch = torch.tensor(a, requires_grad=True)
@@ -97,7 +96,9 @@ def test_concatenation(a, b, c):
     b_torch.grad = None
     c_torch = torch.tensor(c, requires_grad=True)
     c_torch.grad = None
-    x_torch = (( (a_torch + 1) * b_torch ).tanh() * (a_torch + c_torch).tanh() + b_torch).tanh()
+    x_torch = (
+        ((a_torch + 1) * b_torch).tanh() * (a_torch + c_torch).tanh() + b_torch
+    ).tanh()
 
     x_eng.backward()
     x_torch.backward()
