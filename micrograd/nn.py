@@ -57,6 +57,13 @@ class MLP:
 
         return intermediate_values[-1]
 
+    def parameters(self):
+        for layer in self.neurons:
+            for neuron in layer:
+                for w in neuron.w:
+                    yield w
+                yield neuron.b
+
 
 def main():
     mlp = MLP(3, [2, 3], 1)
