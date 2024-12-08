@@ -88,10 +88,7 @@ def test_concatenation(a, b, c):
     a_eng = Value(a)
     b_eng = Value(b)
     c_eng = Value(c)
-    # x_eng = (
-    #     ((a_eng + 1).tanh() * b_eng).tanh() * (a_eng * c_eng).tanh() + c_eng
-    # ).tanh()
-    x_eng = (a_eng + 1).tanh()
+    x_eng = (( (a_eng + 1) * b_eng ).tanh() * (a_eng + c_eng).tanh() + b_eng).tanh()
 
     # 2. Pytorch implementation
     a_torch = torch.tensor(a, requires_grad=True)
@@ -100,15 +97,12 @@ def test_concatenation(a, b, c):
     b_torch.grad = None
     c_torch = torch.tensor(c, requires_grad=True)
     c_torch.grad = None
-    # x_torch = (
-    #     ((a_torch + 1).tanh() * b_torch).tanh() * (a_torch * c_torch).tanh() + c_torch
-    # ).tanh()
-    x_torch = (a_torch + 1).tanh()
+    x_torch = (( (a_torch + 1) * b_torch ).tanh() * (a_torch + c_torch).tanh() + b_torch).tanh()
 
     x_eng.backward()
     x_torch.backward()
 
-    assert pytest.approx(x_eng.data) == x_torch.item()
-    assert pytest.approx(a_eng.grad) == a_torch.grad.item()
-    # assert pytest.approx(b_eng.grad) == b_torch.grad.item()
-    # assert pytest.approx(c_eng.grad) == c_torch.grad.item()
+    assert pytest.approx(x_eng.data, rel=1e-4, abs=1e-7) == x_torch.item()
+    assert pytest.approx(a_eng.grad, rel=1e-4, abs=1e-7) == a_torch.grad.item()
+    assert pytest.approx(b_eng.grad, rel=1e-4, abs=1e-7) == b_torch.grad.item()
+    assert pytest.approx(c_eng.grad, rel=1e-4, abs=1e-7) == c_torch.grad.item()
