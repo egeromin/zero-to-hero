@@ -72,6 +72,23 @@ def test_tanh(x):
     assert pytest.approx(x_eng.grad) == x_torch.grad.item()
 
 
+@settings(max_examples=20)
+@given(st.floats(min_value=1, max_value=1e4), st.floats(min_value=1.5, max_value=10))
+def test_pow(x, p):
+    x_eng = Value(x)
+    y_eng = x_eng ** p
+    y_eng.grad = 1.0
+    y_eng._backward()
+
+    x_torch = torch.tensor(x, requires_grad=True)
+    y_torch = x_torch ** p
+    x_torch.grad = None
+    y_torch.backward()
+
+    assert pytest.approx(y_eng.data) == y_torch.item()
+    assert pytest.approx(x_eng.grad) == x_torch.grad.item()
+
+
 # Bound the input values, again to reduce overflow and underflow problems.
 @settings(max_examples=20)
 @given(

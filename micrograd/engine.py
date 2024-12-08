@@ -74,6 +74,16 @@ class Value:
     def __rmul__(self, other):
         return self * other
 
+    def __pow__(self, other):
+        assert isinstance(other, (int, float))
+        value = Value(self.data ** other, op="**", children=[self])
+
+        def _backward():
+            self.grad += other * value.data / self.data
+
+        value._backward = _backward
+        return value
+
     def tanh(self):
         tanh = math.tanh(self.data)  # e^x - e^(-x) / e^x + e^(-x)
         value = Value(data=tanh, op="tanh", children=[self])
