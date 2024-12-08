@@ -30,15 +30,9 @@ class MLPTorch(nn.Module):
         return x
 
 
-@pytest.mark.parametrize("inputs", [
-    (2, 3),
-    (5, 10),
-    (7, 8),
-    (0.1, 0.9),
-    (100, 200),
-    (80, 20),
-    (7, 2)
-])
+@pytest.mark.parametrize(
+    "inputs", [(2, 3), (5, 10), (7, 8), (0.1, 0.9), (100, 200), (80, 20), (7, 2)]
+)
 def test_mlp_torch(inputs):
     mlp = MLP(2, [3, 3], 1)
     inputs = [Value(inputs[0], name="x_0"), Value(inputs[1], name="x_1")]
