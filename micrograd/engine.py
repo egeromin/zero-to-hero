@@ -78,7 +78,7 @@ class Value:
         value = Value(data=tanh, op="tanh", children=[self])
 
         def _backward():
-            self.grad += (1 - value.data ** 2) * value.grad
+            self.grad += (1 - value.data**2) * value.grad
 
         value._backward = _backward
         return value
