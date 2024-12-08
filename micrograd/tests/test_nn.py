@@ -40,7 +40,7 @@ class MLPTorch(nn.Module):
     (7, 2)
 ])
 def test_mlp_torch(inputs):
-    mlp = MLP(2, [3, 3, 3], 1)
+    mlp = MLP(2, [3, 3], 1)
     inputs = [Value(inputs[0], name="x_0"), Value(inputs[1], name="x_1")]
     output = mlp(inputs)[0].data
 

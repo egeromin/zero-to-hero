@@ -7,9 +7,9 @@ from graphviz import Digraph
 
 # Goal 1: Implement graph rendering correctly ✅
 # Goal 2: Full implementation of operations needed for MLP: + , * and tanh ✅
-# Goal 3: Wrappers to build a MLP, to ensure we have all the operations we need.
+# Goal 3: Wrappers to build a MLP, to ensure we have all the operations we need.  ✅
 #     Goal 3.5: how to test this?
-#               test outputs with pytorch.
+#               test outputs with pytorch.  ✅
 # Goal 4: Backprop for all of the engine operations
 #     Goal 4.5: Add backprop to MLP wrapper
 # Goal 5: Train it on some mock data
