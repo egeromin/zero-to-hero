@@ -1,4 +1,5 @@
 import math
+import uuid
 from collections import deque
 from dataclasses import dataclass
 
@@ -33,6 +34,7 @@ class Value:
         self.grad = 0.0
         self.children = children or []
         self._backward = lambda: None
+        self.id = str(uuid.uuid4())
 
     def __repr__(self):
         return "Value(data={}, op={}, name={}, grad={})".format(
@@ -47,9 +49,7 @@ class Value:
 
         def _backward():
             self.grad += value.grad
-            print(self)
             other.grad += value.grad
-            print(other)
 
         value._backward = _backward
         return value
@@ -65,9 +65,7 @@ class Value:
 
         def _backward():
             self.grad += other.data * value.grad
-            print(self)
             other.grad += self.data * value.grad
-            print(other)
 
         value._backward = _backward
         return value
@@ -81,30 +79,46 @@ class Value:
 
         def _backward():
             self.grad += (1 - value.data) * value.grad
-            print(self)
 
         value._backward = _backward
         return value
 
     def backward(self):
-        """Backprop recursively on the node, its children, and children's children,
-        until the whole graph has been backpropped."""
+        """
+        Backprop recursively on the node, its children, and children's children,
+        until the whole graph has been backpropped.
+
+        We need to ensure that we have all of the gradient of a given child node
+        accumulated, before we do backprop on it.
+        """
+
+        # First, topologically sort the nodes.
+        # Use depth first search to do this.
+        visited = set()
+        topological_sort = []
+
+        # Stack size is limited to max depth.
+        # TODO: how to refactor in order not to use recursion?
+        def visit_recursive(node):
+            if node.id not in visited:
+                visited.add(node.id)
+                for child in node.children:
+                    visit_recursive(child)
+                topological_sort.append(node)
+
+        visit_recursive(self)
+        assert len(visited) == len(topological_sort)
+        assert topological_sort[-1] == self
+        # Now, topological_sort contains a topological sort of the vertices.
 
         # Gradient of a variable with respect to itself is 1.
         # This is how we initialise the backprop.
-
         self.grad = 1.0
-        visited = set()
-        to_backprop = deque([self])
-        while to_backprop:
-            current = to_backprop.popleft()
-            if current in visited:
-                print(f"{current} already backpropped, skipping")
-                continue
-            visited.add(current)
-            current._backward()
-            for child in current.children:
-                to_backprop.append(child)
+
+        # Traverse the nodes in reverse and backprop
+        for node in reversed(topological_sort):
+            print(f"Local backprop on {node}")
+            node._backward()
 
 
 @dataclass(frozen=True, eq=True)
