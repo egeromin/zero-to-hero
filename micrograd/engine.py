@@ -1,6 +1,6 @@
-from dataclasses import dataclass
-from collections import deque
 import math
+from collections import deque
+from dataclasses import dataclass
 
 from graphviz import Digraph
 
@@ -10,8 +10,10 @@ from graphviz import Digraph
 # Goal 3: Wrappers to build a MLP, to ensure we have all the operations we need.  ✅
 #     Goal 3.5: how to test this?
 #               test outputs with pytorch.  ✅
-# Goal 4: Backprop for all of the engine operations
-#     Goal 4.5: Add backprop to MLP wrapper
+# Goal 4: Backprop
+#     Goal 4.1: Backprop for all of the engine operations  ✅
+#     Goal 4.2: Add backprop global function
+#     Goal 4.3: Add backprop to MLP wrapper
 # Goal 5: Train it on some mock data
 # Goal 6: Train on a more complicated an visually appealing dataset
 
@@ -29,7 +31,7 @@ class Value:
         self.name = name
         self.grad = 0.0
         self.children = children or []
-        # self._backward = lambda: None
+        self._backward = lambda s: None
 
     def __repr__(self):
         return "Value(data={}, op={}, name={})".format(self.data, self.op, self.name)
@@ -37,7 +39,15 @@ class Value:
     def __add__(self, other):
         if isinstance(other, (int, float)):
             other = Value(data=other, name="scalar")
-        return Value(self.data + other.data, op="+", children=[self, other])
+
+        value = Value(self.data + other.data, op="+", children=[self, other])
+
+        def _backward(s):
+            self.grad += value.grad
+            other.grad += value.grad
+
+        value._backward = _backward
+        return value
 
     def __radd__(self, other):
         return self + other
@@ -45,14 +55,28 @@ class Value:
     def __mul__(self, other):
         if isinstance(other, (int, float)):
             other = Value(data=other, name="scalar")
-        return Value(self.data * other.data, op="*", children=[self, other])
+
+        value = Value(self.data * other.data, op="*", children=[self, other])
+
+        def _backward(s):
+            self.grad += other.data * value.grad
+            other.grad += self.data * value.grad
+
+        value._backward = _backward
+        return value
 
     def __rmul__(self, other):
         return self * other
 
     def tanh(self):
-        tanh = math.tanh(self.data)  # e^x - 1 / e^x + 1
-        return Value(data=tanh, op="tanh", children=[self])
+        tanh = math.tanh(self.data)  # e^x - e^(-x) / e^x + e^(-x)
+        value = Value(data=tanh, op="tanh", children=[self])
+
+        def _backward(s):
+            self.grad += (1 - value.data) * value.grad
+
+        value._backward = _backward
+        return value
 
 
 @dataclass(frozen=True, eq=True)
