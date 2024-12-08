@@ -12,8 +12,9 @@ from graphviz import Digraph
 #               test outputs with pytorch.  ✅
 # Goal 4: Backprop
 #     Goal 4.1: Backprop for all of the engine operations  ✅
-#     Goal 4.2: Add backprop global function
-#     Goal 4.3: Add backprop to MLP wrapper
+#     Goal 4.2: Add backprop global function  ✅
+#     Goal 4.3: Add unit tests for the above
+#     Goal 4.3: Add backprop to MLP wrapper, and unit tests
 # Goal 5: Train it on some mock data
 # Goal 6: Train on a more complicated an visually appealing dataset
 
@@ -31,10 +32,12 @@ class Value:
         self.name = name
         self.grad = 0.0
         self.children = children or []
-        self._backward = lambda s: None
+        self._backward = lambda: None
 
     def __repr__(self):
-        return "Value(data={}, op={}, name={})".format(self.data, self.op, self.name)
+        return "Value(data={}, op={}, name={}, grad={})".format(
+            self.data, self.op, self.name, self.grad
+        )
 
     def __add__(self, other):
         if isinstance(other, (int, float)):
@@ -42,9 +45,11 @@ class Value:
 
         value = Value(self.data + other.data, op="+", children=[self, other])
 
-        def _backward(s):
+        def _backward():
             self.grad += value.grad
+            print(self)
             other.grad += value.grad
+            print(other)
 
         value._backward = _backward
         return value
@@ -58,9 +63,11 @@ class Value:
 
         value = Value(self.data * other.data, op="*", children=[self, other])
 
-        def _backward(s):
+        def _backward():
             self.grad += other.data * value.grad
+            print(self)
             other.grad += self.data * value.grad
+            print(other)
 
         value._backward = _backward
         return value
@@ -72,11 +79,32 @@ class Value:
         tanh = math.tanh(self.data)  # e^x - e^(-x) / e^x + e^(-x)
         value = Value(data=tanh, op="tanh", children=[self])
 
-        def _backward(s):
+        def _backward():
             self.grad += (1 - value.data) * value.grad
+            print(self)
 
         value._backward = _backward
         return value
+
+    def backward(self):
+        """Backprop recursively on the node, its children, and children's children,
+        until the whole graph has been backpropped."""
+
+        # Gradient of a variable with respect to itself is 1.
+        # This is how we initialise the backprop.
+
+        self.grad = 1.0
+        visited = set()
+        to_backprop = deque([self])
+        while to_backprop:
+            current = to_backprop.popleft()
+            if current in visited:
+                print(f"{current} already backpropped, skipping")
+                continue
+            visited.add(current)
+            current._backward()
+            for child in current.children:
+                to_backprop.append(child)
 
 
 @dataclass(frozen=True, eq=True)
@@ -120,7 +148,9 @@ def draw_graph(value: Value):
             return
 
         dot.node(
-            name=node_ids.from_id, label=f"{node.name} | {node.data:.4f}", shape="box"
+            name=node_ids.from_id,
+            label=f"{node.name} | data: {node.data:.4f}, grad: {node.grad:.4f}",
+            shape="box",
         )
         if node.op:
             dot.node(name=node_ids.to_id, label=node.op)
@@ -155,13 +185,15 @@ def main():
     e = 2 + d
     e.name = "e"
 
-    f = e * 7
+    f = e * (1 / 7)
     f.name = "f"
-    g = 3 * f
+    g = (1 / 3) * f
     g.name = "g"
 
     t = g.tanh()
     t.name = "t"
+
+    t.backward()
 
     draw_graph(t)
 
