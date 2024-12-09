@@ -77,7 +77,7 @@ class Value:
     def __pow__(self, other):
         # Allow only positive integer powers for now, to avoid any issues with complex numbers.
         assert isinstance(other, int) and other >= 1
-        value = Value(self.data ** other, op="**", children=[self])
+        value = Value(self.data**other, op="**", children=[self])
 
         def _backward():
             local_grad = 0.0

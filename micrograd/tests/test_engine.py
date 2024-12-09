@@ -76,12 +76,12 @@ def test_tanh(x):
 @given(st.floats(min_value=-10, max_value=10), st.integers(min_value=1, max_value=4))
 def test_pow(x, p):
     x_eng = Value(x)
-    y_eng = x_eng ** p
+    y_eng = x_eng**p
     y_eng.grad = 1.0
     y_eng._backward()
 
     x_torch = torch.tensor(x, requires_grad=True)
-    y_torch = x_torch ** p
+    y_torch = x_torch**p
     x_torch.grad = None
     y_torch.backward()
 
@@ -104,7 +104,7 @@ def test_concatenation(a, b, c):
     a_eng = Value(a)
     b_eng = Value(b)
     c_eng = Value(c)
-    x_eng = (((a_eng + 1) * b_eng ** 2).tanh() * (a_eng + c_eng).tanh() + b_eng).tanh()
+    x_eng = (((a_eng + 1) * b_eng**2).tanh() * (a_eng + c_eng).tanh() + b_eng).tanh()
 
     # 2. Pytorch implementation
     a_torch = torch.tensor(a, requires_grad=True)
@@ -114,7 +114,7 @@ def test_concatenation(a, b, c):
     c_torch = torch.tensor(c, requires_grad=True)
     c_torch.grad = None
     x_torch = (
-        ((a_torch + 1) * b_torch ** 2).tanh() * (a_torch + c_torch).tanh() + b_torch
+        ((a_torch + 1) * b_torch**2).tanh() * (a_torch + c_torch).tanh() + b_torch
     ).tanh()
 
     x_eng.backward()

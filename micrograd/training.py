@@ -16,7 +16,9 @@ def main():
 
     def mse(outputs: list[Value]) -> Value:
         assert len(outputs) == len(labels)
-        sum_of_squares = sum((out + Value(-label)) ** 2 for out, label in zip(outputs, labels))
+        sum_of_squares = sum(
+            (out + Value(-label)) ** 2 for out, label in zip(outputs, labels)
+        )
         return sum_of_squares * (1 / len(outputs))
 
     inputs = [[Value(x) for x in feat] for feat in features]
