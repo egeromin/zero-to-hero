@@ -16,9 +16,9 @@ def main():
     # plt.scatter(features[:, 0], features[:, 1], c=labels, s=20, cmap='jet')
     # plt.show()
 
-    mlp = MLP(2, [2, 3, 2], 1)
+    mlp = MLP(2, [2, 2, 2, 2, 2, 2], 1)
     mlp, final_loss, final_predictions = train_with_sgd(
-        mlp, features, labels, max_steps=20
+        mlp, features, labels, max_steps=500
     )
     print(f"Final loss: {final_loss}")
     print(f"Final predictions: {final_predictions}")
@@ -31,8 +31,8 @@ def main():
     y_min, y_max = features[:, 1].min(), features[:, 1].max()
     y_padding = (y_max - y_min) * padding_factor
     xx, yy = np.meshgrid(
-        np.linspace(-x_min - x_padding, x_max + x_padding, 20),
-        np.linspace(-y_min - y_padding, y_max + y_padding, 20),
+        np.linspace(x_min - x_padding, x_max + x_padding, 20),
+        np.linspace(y_min - y_padding, y_max + y_padding, 20),
     )
 
     predictions = []
