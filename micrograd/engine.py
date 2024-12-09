@@ -16,8 +16,8 @@ from graphviz import Digraph
 #     Goal 4.2: Add backprop global function  ✅
 #     Goal 4.3: Add unit tests for the above  ✅
 #     Goal 4.3: Add backprop to MLP wrapper, and unit tests  [LATER, first check how it's used in training]
-# Goal 5: Train it on some mock data
-#     Goal 5.1: implement power operation for value - TODO
+# Goal 5: Train it on some mock data  ✅
+#     Goal 5.1: implement power operation for value ✅
 # Goal 6: Train on a more complicated an visually appealing dataset
 
 
@@ -136,7 +136,7 @@ class Value:
 
         # Traverse the nodes in reverse and backprop
         for node in reversed(topological_sort):
-            print(f"Local backprop on {node}")
+            # print(f"Local backprop on {node}")
             node._backward()
 
 
