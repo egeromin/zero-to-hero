@@ -18,7 +18,7 @@ from graphviz import Digraph
 #     Goal 4.3: Add backprop to MLP wrapper, and unit tests  [LATER, first check how it's used in training]
 # Goal 5: Train it on some mock data  ✅
 #     Goal 5.1: implement power operation for value ✅
-# Goal 6: Train on a more complicated an visually appealing dataset
+# Goal 6: Train on the sklearn moons dataset
 
 
 class Value:
