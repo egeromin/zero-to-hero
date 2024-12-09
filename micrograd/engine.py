@@ -75,11 +75,19 @@ class Value:
         return self * other
 
     def __pow__(self, other):
-        assert isinstance(other, (int, float))
+        # Allow only positive integer powers for now, to avoid any issues with complex numbers.
+        assert isinstance(other, int) and other >= 1
         value = Value(self.data ** other, op="**", children=[self])
 
         def _backward():
-            self.grad += other * value.data / self.data
+            local_grad = 0.0
+            if math.fabs(self.data) > 1e-12:
+                # Usual case
+                local_grad = other * value.data / self.data
+            elif other == 1:
+                # identity
+                local_grad = 1
+            self.grad += local_grad * value.grad
 
         value._backward = _backward
         return value

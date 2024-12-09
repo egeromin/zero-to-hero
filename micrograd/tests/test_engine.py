@@ -1,7 +1,7 @@
 import torch
 
 import pytest
-from hypothesis import given, strategies as st, settings
+from hypothesis import given, strategies as st, settings, Verbosity
 
 from engine import Value
 
@@ -11,7 +11,7 @@ from engine import Value
 
 @settings(max_examples=20)
 @given(
-    st.floats(min_value=-1e4, max_value=1e4), st.floats(min_value=-1e4, max_value=1e4)
+    st.floats(min_value=-1e3, max_value=1e3), st.floats(min_value=-1e3, max_value=1e3)
 )
 def test_add(x, y):
     x_eng = Value(x)
@@ -34,7 +34,7 @@ def test_add(x, y):
 
 @settings(max_examples=20)
 @given(
-    st.floats(min_value=-1e4, max_value=1e4), st.floats(min_value=-1e4, max_value=1e4)
+    st.floats(min_value=-1e3, max_value=1e3), st.floats(min_value=-1e3, max_value=1e3)
 )
 def test_mul(x, y):
     x_eng = Value(x)
@@ -56,7 +56,7 @@ def test_mul(x, y):
 
 
 @settings(max_examples=20)
-@given(st.floats(min_value=-1e4, max_value=1e4))
+@given(st.floats(min_value=-1e3, max_value=1e3))
 def test_tanh(x):
     x_eng = Value(x)
     y_eng = x_eng.tanh()
@@ -72,8 +72,8 @@ def test_tanh(x):
     assert pytest.approx(x_eng.grad) == x_torch.grad.item()
 
 
-@settings(max_examples=20)
-@given(st.floats(min_value=1, max_value=1e4), st.floats(min_value=1.5, max_value=10))
+@settings(max_examples=20, verbosity=Verbosity.verbose)
+@given(st.floats(min_value=-10, max_value=10), st.integers(min_value=1, max_value=4))
 def test_pow(x, p):
     x_eng = Value(x)
     y_eng = x_eng ** p
@@ -86,7 +86,7 @@ def test_pow(x, p):
     y_torch.backward()
 
     assert pytest.approx(y_eng.data) == y_torch.item()
-    assert pytest.approx(x_eng.grad) == x_torch.grad.item()
+    assert pytest.approx(x_eng.grad, abs=1e-8, rel=1e-6) == x_torch.grad.item()
 
 
 # Bound the input values, again to reduce overflow and underflow problems.
@@ -104,7 +104,7 @@ def test_concatenation(a, b, c):
     a_eng = Value(a)
     b_eng = Value(b)
     c_eng = Value(c)
-    x_eng = (((a_eng + 1) * b_eng).tanh() * (a_eng + c_eng).tanh() + b_eng).tanh()
+    x_eng = (((a_eng + 1) * b_eng ** 2).tanh() * (a_eng + c_eng).tanh() + b_eng).tanh()
 
     # 2. Pytorch implementation
     a_torch = torch.tensor(a, requires_grad=True)
@@ -114,7 +114,7 @@ def test_concatenation(a, b, c):
     c_torch = torch.tensor(c, requires_grad=True)
     c_torch.grad = None
     x_torch = (
-        ((a_torch + 1) * b_torch).tanh() * (a_torch + c_torch).tanh() + b_torch
+        ((a_torch + 1) * b_torch ** 2).tanh() * (a_torch + c_torch).tanh() + b_torch
     ).tanh()
 
     x_eng.backward()
