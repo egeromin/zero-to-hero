@@ -16,7 +16,9 @@ def train_with_sgd(
     def loss_fn(outputs: list[Value]) -> Value:
         # Loss function, svm "max-margin" loss
         assert len(outputs) == len(labels)
-        losses = [(1 + Value(-label) * out).relu() for label, out in zip(labels, outputs)]
+        losses = [
+            (1 + Value(-label) * out).relu() for label, out in zip(labels, outputs)
+        ]
         return sum(losses) * (1 / len(outputs))
 
     def accuracy_fn(predictions: list[int]) -> float:
@@ -31,7 +33,7 @@ def train_with_sgd(
         print(f"Step {step}: loss = {loss.data}, accuracy = {accuracy}")
 
         # Gradually decrease the learning rate
-        learning_rate = 1.0 - step*0.9/100
+        learning_rate = 1.0 - step * 0.9 / 100
         # Backprop and update parameters.
         loss.backward()
         for param in mlp.parameters():
