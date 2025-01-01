@@ -64,6 +64,10 @@ class MLP:
                     yield w
                 yield neuron.b
 
+    def zero_grad(self):
+        for param in self.parameters():
+            param.grad = 0.0
+
 
 def main():
     mlp = MLP(3, [2, 3], 1)

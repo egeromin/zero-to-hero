@@ -19,7 +19,15 @@ def train_with_sgd(
         losses = [
             (1 + Value(-label) * out).relu() for label, out in zip(labels, outputs)
         ]
-        return sum(losses) * (1 / len(outputs))
+        data_loss = sum(losses) * (1 / len(outputs))
+
+        # L2 regularization
+        # alpha = 1e-4
+        # reg_loss = alpha * sum((p * p for p in mlp.parameters()))
+        reg_loss = 0.0
+        total_loss = data_loss + reg_loss
+
+        return total_loss
 
     def accuracy_fn(predictions: list[int]) -> float:
         num_correct = sum(pred == label for pred, label in zip(predictions, labels))
@@ -38,7 +46,8 @@ def train_with_sgd(
         loss.backward()
         for param in mlp.parameters():
             param.data -= learning_rate * param.grad
-            param.grad = 0.0
+
+        mlp.zero_grad()
 
     final_loss = loss.data
     final_outputs = [out.data for out in outputs]
