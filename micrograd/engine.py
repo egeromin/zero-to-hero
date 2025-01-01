@@ -23,7 +23,6 @@ from graphviz import Digraph
 #     and a different loss function. Try to understand why that particular loss function works better.
 
 
-
 class Value:
     def __init__(
         self,

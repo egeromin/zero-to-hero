@@ -41,7 +41,11 @@ def train_with_sgd(
     predictions = []
     print(f"Training with a batch size of {batch_size}")
     for batch_features, batch_labels in batch_maker():
-        if (loss := mse(predictions := [mlp(inp)[0] for inp in batch_features], batch_labels)).data <= loss_threshold:
+        if (
+            loss := mse(
+                predictions := [mlp(inp)[0] for inp in batch_features], batch_labels
+            )
+        ).data <= loss_threshold:
             print(f"Loss = {loss.data} <= threshold {loss_threshold}, ending")
             break
 
