@@ -19,6 +19,9 @@ from graphviz import Digraph
 # Goal 5: Train it on some mock data  ✅
 #     Goal 5.1: implement power operation for value ✅
 # Goal 6: Train on the sklearn moons dataset
+#     Goal 6.1: Try with data loader using mini batches
+#     and a different loss function. Try to understand why that particular loss function works better.
+
 
 
 class Value:
