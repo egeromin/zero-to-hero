@@ -102,6 +102,17 @@ class Value:
         value._backward = _backward
         return value
 
+    def relu(self):
+        relu = self.data if self.data > 0 else 0
+        value = Value(data=relu, op="relu", children=[self])
+
+        def _backward():
+            local_grad = 1.0 if value.data > 0 else 0
+            self.grad += local_grad * value.grad
+
+        value._backward = _backward
+        return value
+
     def backward(self):
         """
         Backprop recursively on the node, its children, and children's children,

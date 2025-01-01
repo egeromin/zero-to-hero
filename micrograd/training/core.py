@@ -14,12 +14,10 @@ def train_with_sgd(
     labels = list(labels)
 
     def loss_fn(outputs: list[Value]) -> Value:
-        # Loss function, currently mean squared error
+        # Loss function, svm "max-margin" loss
         assert len(outputs) == len(labels)
-        sum_of_squares = sum(
-            (out + Value(-label)) ** 2 for out, label in zip(outputs, labels)
-        )
-        return sum_of_squares * (1 / len(outputs))
+        losses = [(1 + Value(-label) * out).relu() for label, out in zip(labels, outputs)]
+        return sum(losses) * (1 / len(outputs))
 
     def accuracy_fn(predictions: list[int]) -> float:
         num_correct = sum(pred == label for pred, label in zip(predictions, labels))
