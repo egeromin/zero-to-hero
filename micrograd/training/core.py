@@ -22,9 +22,8 @@ def train_with_sgd(
         data_loss = sum(losses) * (1 / len(outputs))
 
         # L2 regularization
-        # alpha = 1e-4
-        # reg_loss = alpha * sum((p * p for p in mlp.parameters()))
-        reg_loss = 0.0
+        alpha = 1e-4
+        reg_loss = alpha * sum((p * p for p in mlp.parameters()))
         total_loss = data_loss + reg_loss
 
         return total_loss
