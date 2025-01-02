@@ -10,9 +10,9 @@ from nn import MLP
 def main():
     features, labels = make_moons(n_samples=100, noise=0.1)
 
-    labels = (
-        labels * 2 - 1
-    )  # make y be -1 or 1 due to tanh. Commented out if using relu
+    # make y be -1 or 1 due to tanh. Commented out if using relu
+    labels = labels * 2 - 1
+
     # visualize in 2D
     # plt.figure(figsize=(5, 5))
     # plt.scatter(features[:, 0], features[:, 1], c=labels, s=20, cmap='jet')
