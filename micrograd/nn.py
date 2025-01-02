@@ -9,7 +9,9 @@ class Neuron:
     def __init__(self, n_inputs: int):
         # TODO: improve initialisation.
         self.n_inputs = n_inputs
-        self.w = [Value(data=random.uniform(-1, 1), name=f"w_{i}") for i in range(n_inputs)]
+        self.w = [
+            Value(data=random.uniform(-1, 1), name=f"w_{i}") for i in range(n_inputs)
+        ]
         self.b = Value(data=0.0, name="b")
 
     def __repr__(self):
