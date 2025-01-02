@@ -21,7 +21,7 @@ class Neuron:
         if len(inputs) != self.n_inputs:
             raise RuntimeError(f"Expected {self.n_inputs} inputs, got {len(inputs)}")
         linear_combination = sum(inp * w for inp, w in zip(inputs, self.w)) + self.b
-        return linear_combination.tanh()
+        return linear_combination.relu()
 
 
 class MLP:

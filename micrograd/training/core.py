@@ -29,15 +29,15 @@ def train_with_sgd(
 
         return total_loss
 
-    def accuracy_fn(predictions: list[int]) -> float:
+    def accuracy_fn(outputs: list[Value]) -> float:
+        predictions = [1 if output.data > 0 else -1 for output in outputs]
         num_correct = sum(pred == label for pred, label in zip(predictions, labels))
         return num_correct / len(predictions)
 
     inputs = [[Value(x) for x in feat] for feat in features]
     for step in range(100):
         loss = loss_fn(outputs := [mlp(inp)[0] for inp in inputs])
-        predictions = [1 if output.data > 0 else -1 for output in outputs]
-        accuracy = accuracy_fn(predictions)
+        accuracy = accuracy_fn(outputs)
         print(f"Step {step}: loss = {loss.data}, accuracy = {accuracy}")
 
         # Gradually decrease the learning rate

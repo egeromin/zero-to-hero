@@ -10,7 +10,7 @@ from nn import MLP
 def main():
     features, labels = make_moons(n_samples=100, noise=0.1)
 
-    # make y be -1 or 1 due to tanh. Commented out if using relu
+    # make y be -1 or 1
     labels = labels * 2 - 1
 
     # visualize in 2D
