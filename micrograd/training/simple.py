@@ -14,10 +14,11 @@ def main():
 
     mlp = MLP(4, [2, 3, 2], 1)
 
-    mlp, final_loss, final_predictions = train_with_sgd(mlp, features, labels)
+    mlp, final_loss, final_predictions, final_accuracy = train_with_sgd(mlp, features, labels)
 
     print(f"Final loss: {final_loss}")
     print(f"Final predictions: {final_predictions}")
+    print(f"Final accuracy: {final_accuracy}")
 
 
 if __name__ == "__main__":

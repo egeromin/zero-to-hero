@@ -8,7 +8,7 @@ def train_with_sgd(
     mlp: MLP,
     features: Iterable[Iterable[float | int]],
     labels: Iterable[float | int],
-) -> tuple[MLP, float, list[float]]:
+) -> tuple[MLP, float, list[float], float]:
     # Collect the features and labels
     features = [list(f) for f in features]
     labels = list(labels)
@@ -50,5 +50,6 @@ def train_with_sgd(
         mlp.zero_grad()
 
     final_loss = loss.data
+    final_accuracy = accuracy
     final_outputs = [out.data for out in outputs]
-    return mlp, final_loss, final_outputs
+    return mlp, final_loss, final_outputs, final_accuracy

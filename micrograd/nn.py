@@ -1,3 +1,5 @@
+import random
+
 from engine import Value, draw_graph
 
 
@@ -7,7 +9,7 @@ class Neuron:
     def __init__(self, n_inputs: int):
         # TODO: improve initialisation.
         self.n_inputs = n_inputs
-        self.w = [Value(data=1.0, name=f"w_{i}") for i in range(n_inputs)]
+        self.w = [Value(data=random.uniform(-1, 1), name=f"w_{i}") for i in range(n_inputs)]
         self.b = Value(data=0.0, name="b")
 
     def __repr__(self):
@@ -30,7 +32,7 @@ class MLP:
             self.n_outputs
         ]  # sizes of all layers, intermediate and output
 
-        # number of inputs to each layer in all_layers, intermediate and output
+        # Number of inputs to each layer in all_layers, intermediate and output
         all_layers_n_inputs = [self.n_inputs] + self.sz_layers
         self.neurons = [
             [Neuron(n_inputs) for _ in range(sz_layer)]

@@ -10,16 +10,17 @@ from nn import MLP
 def main():
     features, labels = make_moons(n_samples=100, noise=0.1)
 
-    labels = labels * 2 - 1  # make y be -1 or 1
+    labels = labels * 2 - 1  # make y be -1 or 1 due to tanh. Commented out if using relu
     # visualize in 2D
     # plt.figure(figsize=(5, 5))
     # plt.scatter(features[:, 0], features[:, 1], c=labels, s=20, cmap='jet')
     # plt.show()
 
-    mlp = MLP(2, [2, 2, 2, 2, 2, 2], 1)
-    mlp, final_loss, final_predictions = train_with_sgd(mlp, features, labels)
+    mlp = MLP(2, [16, 16], 1)
+    mlp, final_loss, final_predictions, final_accuracy = train_with_sgd(mlp, features, labels)
     print(f"Final loss: {final_loss}")
     print(f"Final predictions: {final_predictions}")
+    print(f"Final accuracy: {final_accuracy}")
 
     # How to visualise the decision boundary?
     # Use a grid
