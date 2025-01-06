@@ -32,8 +32,21 @@ def load_bigram_counts() -> tuple[torch.Tensor, Mapping[str, int]]:
     return counts, stoi
 
 
-def sample_from_model(probs: torch.Tensor):
-    pass
+def sample_from_model(
+    probs: torch.Tensor, itos: Mapping[int, str], g: torch.Generator
+) -> str:
+    current_idx = 0
+
+    def _sample_next(current_idx: int) -> int:
+        return torch.multinomial(
+            probs[current_idx, :], num_samples=1, replacement=True, generator=g
+        ).item()
+
+    samples = []
+    while (current_idx := _sample_next(current_idx)) != 0:
+        samples.append(itos[current_idx])
+
+    return "".join(samples)
 
 
 def main():
@@ -57,12 +70,13 @@ def main():
             plt.text(j, i, counts[i, j].item(), ha="center", va="top", color="gray")
     plt.show()
 
-    # Compute the probability matrix.
-    # P = ...
+    # Compute the probability matrix. Each row should be a probability distribution
+    probs = counts / torch.sum(counts, dim=1, keepdim=True)
 
     # Sample from probability matrix.
+    g = torch.Generator().manual_seed(2147483647)
     for _ in range(num_samples):
-        pass
+        print(sample_from_model(probs, itos, g))
 
 
 if __name__ == "__main__":
