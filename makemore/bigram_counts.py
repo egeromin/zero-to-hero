@@ -78,6 +78,11 @@ def main():
     for _ in range(num_samples):
         print(sample_from_model(probs, itos, g))
 
+    # Results are different to those in the notebook,
+    # but confirmed that the approach is the same.
+    # Possibly sampling is system dependent.
+    # Link to notebook: https://github.com/karpathy/nn-zero-to-hero/blob/master/lectures/makemore/makemore_part1_bigrams.ipynb
+
 
 if __name__ == "__main__":
     main()
