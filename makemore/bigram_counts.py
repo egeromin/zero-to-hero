@@ -11,7 +11,9 @@ import torch
 from matplotlib import pyplot as plt
 
 
-def load_bigram_counts() -> tuple[torch.Tensor, Mapping[str, int]]:
+def load_bigram_counts() -> (
+    tuple[torch.Tensor, Mapping[str, int], list[tuple[int, int]]]
+):
     """
     Parses the `names.txt` file to return the bi-gram counts,
     as well as the mapping from indices to characters.
@@ -25,11 +27,13 @@ def load_bigram_counts() -> tuple[torch.Tensor, Mapping[str, int]]:
     }
 
     counts = torch.zeros((len(stoi), len(stoi)), dtype=torch.int)
+    bigrams = []
     for name in all_names.split():
         for c1, c2 in zip("." + name, name + "."):
             counts[stoi[c1], stoi[c2]] += 1
+            bigrams.append((stoi[c1], stoi[c2]))
 
-    return counts, stoi
+    return counts, stoi, bigrams
 
 
 def sample_from_model(
@@ -56,7 +60,7 @@ def main():
     else:
         num_samples = int(sys.argv[1])
 
-    counts, stoi = load_bigram_counts()
+    counts, stoi, _bigrams = load_bigram_counts()
     itos = {i: c for c, i in stoi.items()}
 
     # Display the counts using matplotlib.
