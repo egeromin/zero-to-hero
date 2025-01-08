@@ -12,7 +12,7 @@ from bigram_counts import load_bigram_counts, sample_from_model
 
 
 def learn_prob_matrix(
-    bigrams: list[tuple[int, int]], num_chars: int, num_steps: int = 22000
+    bigrams: list[tuple[int, int]], num_chars: int, num_steps: int = 500
 ) -> torch.Tensor:
     # How do we learn? Through 1-hot encodings
     # one_hot(input) * N = one_hot(output)
@@ -21,12 +21,14 @@ def learn_prob_matrix(
     # Reasoning was: real values, rather than positive integers - and can take both positive and negative values.
     # And what is the loss? Negative log-likelihood = cross entropy.
 
+    print(f"Number of bigrams: {len(bigrams)}")
+
     # Initialise the negative log counts.
     g = torch.Generator().manual_seed(2147483647)
     log_counts = torch.randn(
         size=(num_chars, num_chars), generator=g, requires_grad=True
     )
-    batch_size = 100
+    batch_size = 1000
 
     inputs = F.one_hot(
         torch.tensor([b[0] for b in bigrams], dtype=torch.long), num_classes=num_chars
@@ -38,7 +40,7 @@ def learn_prob_matrix(
     assert len(inputs) == len(bigrams) == len(labels)
 
     # Learn over mini-batches
-    learning_rate = 0.1
+    learning_rate = 50
     for i in range(num_steps):
         log_counts.grad = None
 
