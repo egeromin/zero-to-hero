@@ -54,7 +54,10 @@ def learn_prob_matrix(
         log_probs_batch = F.log_softmax(logits_batch, dim=-1)
         assert log_probs_batch.shape == (batch_size, num_chars)  # 100 x 27
 
-        loss = -(log_probs_batch * labels_batch).sum() / batch_size
+        loss = (
+            -(log_probs_batch * labels_batch).sum() / batch_size
+            + 0.01 * (log_counts**2).mean()
+        )
         print(f"Loss at step {i}: {loss.item()}")
         loss.backward()
         log_counts.data -= learning_rate * log_counts.grad
