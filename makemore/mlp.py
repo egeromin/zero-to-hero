@@ -45,10 +45,63 @@ def load_dataset(context_size: int):
     return X, Y, stoi
 
 
+class MLP:
+    def __init__(
+        self, vocab_size: int, context_size: int, embedding_size: int, hidden_size: int
+    ):
+        self.embedding: torch.Tensor = torch.randn(
+            size=(vocab_size, embedding_size), requires_grad=True
+        )
+        self.hidden_w: torch.Tensor = torch.randn(
+            size=(embedding_size * context_size, hidden_size), requires_grad=True
+        )
+        self.hidden_b: torch.Tensor = torch.zeros(
+            size=(hidden_size,), requires_grad=True, dtype=torch.float
+        )
+        self.output_w: torch.Tensor = torch.randn(
+            size=(hidden_size, vocab_size), requires_grad=True
+        )
+        self.output_b: torch.Tensor = torch.zeros(
+            size=(vocab_size,), requires_grad=True, dtype=torch.float
+        )
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        # Forward pass. Do not compute the final softmax,
+        # as this will be calculated inside the loss function,
+        # for numerical stability.
+        print(x.shape)  # 20 * 3
+        embeddings = self.embedding[x]
+        print(embeddings.shape)  # 20 * 3 * 11
+        embeddings_reshaped = embeddings.view(embeddings.shape[0], -1)
+        print(embeddings_reshaped.shape)  # 20 * 33
+        hidden = embeddings_reshaped @ self.hidden_w + self.hidden_b
+        print(hidden.shape)  # 20 * 13
+        hidden_nonlin = hidden.tanh()
+        print(hidden.shape)  # 20 * 13
+        output = hidden_nonlin @ self.output_w + self.output_b
+        print(output.shape)  # 20 * 27
+        return output
+
+
+def train_model(mlp: MLP, X: torch.Tensor, Y: torch.Tensor) -> MLP:
+    pass
+
+
+def sample_from_model(mlp: MLP):
+    pass
+
+
 def main():
-    X, Y, stoi = load_dataset(context_size=3)
-    print(X[:20, :], Y[:20], stoi)
-    print(len(X), len(Y), len(stoi))
+    context_size = 3
+    X, Y, stoi = load_dataset(context_size=context_size)
+    mlp = MLP(
+        vocab_size=len(stoi),
+        context_size=context_size,
+        embedding_size=11,
+        hidden_size=13,
+    )
+    output = mlp.forward(X[:20, :])
+    print(output.shape)
 
 
 if __name__ == "__main__":
