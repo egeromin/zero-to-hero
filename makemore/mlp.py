@@ -6,6 +6,8 @@ https://www.jmlr.org/papers/volume3/bengio03a/bengio03a.pdf
 
 import itertools
 from pathlib import Path
+from typing import Mapping
+import time
 
 import torch
 import torch.nn.functional as F
@@ -143,6 +145,7 @@ def train_model(mlp: MLP, X: torch.Tensor, Y: torch.Tensor, g: torch.Generator) 
             # Calculate the validation accuracy
             val_logits = mlp.forward(X_val)
             val_predictions = val_logits.argmax(dim=-1)
+            print(val_predictions)
             assert val_predictions.shape == Y_val.shape
             val_accuracy = sum(val_predictions == Y_val) / Y_val.shape[0]
             print(
@@ -160,8 +163,32 @@ def train_model(mlp: MLP, X: torch.Tensor, Y: torch.Tensor, g: torch.Generator) 
     return mlp
 
 
-def sample_from_model(mlp: MLP):
-    pass
+def sample_from_model(
+    mlp: MLP,
+    g: torch.Generator,
+    num_samples: int,
+    context_size: int,
+    stoi: Mapping[str, int],
+):
+    itos = {i: c for c, i in stoi.items()}
+    for _ in range(num_samples):
+        preds = []
+        current_ctx = "." * context_size
+        pred = None
+        while pred != ".":
+            x = torch.tensor([stoi[c] for c in current_ctx], dtype=torch.long).view(
+                1, -1
+            )
+            print(x)
+            logits = mlp.forward(x)
+            pred_int = logits.argmax(dim=-1).item()
+            pred = itos[pred_int]
+            preds.append(pred)
+            current_ctx = current_ctx[1:] + pred
+            print(current_ctx)
+            time.sleep(0.5)
+        generated_sample = "".join(preds)
+        print(f"{generated_sample=}")
 
 
 def main():
@@ -180,7 +207,7 @@ def main():
     print(output.shape)
 
     mlp = train_model(mlp, X, Y, g)
-    sample_from_model(mlp)
+    sample_from_model(mlp, g=g, num_samples=10, context_size=context_size, stoi=stoi)
 
 
 if __name__ == "__main__":
