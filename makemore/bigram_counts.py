@@ -11,9 +11,9 @@ import torch
 from matplotlib import pyplot as plt
 
 
-def load_bigram_counts() -> (
-    tuple[torch.Tensor, Mapping[str, int], list[tuple[int, int]]]
-):
+def load_bigram_counts() -> tuple[
+    torch.Tensor, Mapping[str, int], list[tuple[int, int]]
+]:
     """
     Parses the `names.txt` file to return the bi-gram counts,
     as well as the mapping from indices to characters.

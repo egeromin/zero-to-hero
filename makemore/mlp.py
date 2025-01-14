@@ -3,13 +3,11 @@ Implement a model with variable context length using an MLP,
 following the approach described in:
 https://www.jmlr.org/papers/volume3/bengio03a/bengio03a.pdf
 """
+
 import itertools
-import sys
 from pathlib import Path
-from typing import Mapping
 
 import torch
-from matplotlib import pyplot as plt
 
 
 def load_dataset(context_size: int):
@@ -38,7 +36,7 @@ def load_dataset(context_size: int):
         for k in range(len(name_padded) - context_size):
             input_ctx = name_padded[k : k + context_size]
             output_c = name_padded[k + context_size]
-            if i<2:
+            if i < 2:
                 print(f"{input_ctx} -> {output_c}")  # For debug
             X[pos, :] = torch.tensor([stoi[c] for c in input_ctx], dtype=torch.long)
             Y[pos] = stoi[output_c]
@@ -49,7 +47,7 @@ def load_dataset(context_size: int):
 
 def main():
     X, Y, stoi = load_dataset(context_size=3)
-    print(X[:20,:], Y[:20], stoi)
+    print(X[:20, :], Y[:20], stoi)
     print(len(X), len(Y), len(stoi))
 
 
