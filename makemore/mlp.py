@@ -69,17 +69,11 @@ class MLP:
         # Forward pass. Do not compute the final softmax,
         # as this will be calculated inside the loss function,
         # for numerical stability.
-        print(x.shape)  # 20 * 3
         embeddings = self.embedding[x]
-        print(embeddings.shape)  # 20 * 3 * 11
         embeddings_reshaped = embeddings.view(embeddings.shape[0], -1)
-        print(embeddings_reshaped.shape)  # 20 * 33
         hidden = embeddings_reshaped @ self.hidden_w + self.hidden_b
-        print(hidden.shape)  # 20 * 13
         hidden_nonlin = hidden.tanh()
-        print(hidden.shape)  # 20 * 13
         output = hidden_nonlin @ self.output_w + self.output_b
-        print(output.shape)  # 20 * 27
         return output
 
 
