@@ -100,32 +100,62 @@ class MLP:
 
 
 def train_model(mlp: MLP, X: torch.Tensor, Y: torch.Tensor, g: torch.Generator) -> MLP:
-    # Grab a minibatch. V1: overfit on a minibatch. Later: different minibatch per iteration.
-    batch_size = 100
-    batch_idx = torch.randperm(len(X), generator=g)[:batch_size]
-    X_batch = X[batch_idx]
-    Y_batch = Y[batch_idx]
-    assert X_batch.shape == (batch_size, X.shape[1])
-    assert Y_batch.shape == (batch_size,)
+    assert X.shape[0] == Y.shape[0]
+    # split into train, test and validation sets
+    # First shuffle the dataset
+    perm_idx = torch.randperm(len(X), generator=g)
+    X = X[perm_idx]
+    Y = Y[perm_idx]
+    train_split = 0.8
+    val_split = 0.1
+    # test_split = 0.1
+    train_cutoff = int(train_split * X.shape[0])
+    val_cutoff = train_cutoff + int(val_split * X.shape[0])
+    X_train = X[:train_cutoff, :]
+    Y_train = Y[:train_cutoff]
+    X_val = X[train_cutoff:val_cutoff, :]
+    Y_val = Y[train_cutoff:val_cutoff]
+    X_test = X[val_cutoff:, :]
+    Y_test = Y[val_cutoff:]
 
-    num_training_iterations = 5000
+    num_training_iterations = 1800
     reg_alpha = 0.01
     learning_rate = 0.1
     for i in range(num_training_iterations):
+        # Grab a minibatch.
+        batch_size = 100
+        batch_idx = torch.randperm(len(X_train), generator=g)[:batch_size]
+        X_batch = X_train[batch_idx]
+        Y_batch = Y_train[batch_idx]
+        assert X_batch.shape == (batch_size, X_train.shape[1])
+        assert Y_batch.shape == (batch_size,)
+
         mlp.zero_grad()
         logits_batch = mlp.forward(X_batch)
         model_loss = F.cross_entropy(logits_batch, Y_batch) / batch_size
         reg_loss = reg_alpha * ((mlp.hidden_w**2).sum() + (mlp.output_w**2).sum())
 
         loss = model_loss + reg_loss
-
-        predictions = logits_batch.argmax(dim=-1)
-        assert predictions.shape == Y_batch.shape
-        accuracy = sum(predictions == Y_batch) / batch_size
-        print(f"Step {i}: loss = {loss.item():.4f}, accuracy = {accuracy * 100:.2f}%")
-
         loss.backward()
         mlp.update_parameters(learning_rate)
+
+        if i % 100 == 0:
+            # Calculate the validation accuracy
+            val_logits = mlp.forward(X_val)
+            val_predictions = val_logits.argmax(dim=-1)
+            assert val_predictions.shape == Y_val.shape
+            val_accuracy = sum(val_predictions == Y_val) / Y_val.shape[0]
+            print(
+                f"Step {i}: loss = {loss.item():.4f}, validation accuracy = {val_accuracy * 100:.2f}%"
+            )
+
+    # Calculate the final test accuracy.
+    # TODO: extract the below into a standalone function.
+    test_logits = mlp.forward(X_test)
+    test_predictions = test_logits.argmax(dim=-1)
+    assert test_predictions.shape == Y_test.shape
+    test_accuracy = sum(test_predictions == Y_test) / Y_test.shape[0]
+    print(f"Final test accuracy = {test_accuracy * 100:.2f}%")
 
     return mlp
 
