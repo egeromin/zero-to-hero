@@ -119,9 +119,11 @@ def train_model(mlp: MLP, X: torch.Tensor, Y: torch.Tensor, g: torch.Generator) 
     X_test = X[val_cutoff:, :]
     Y_test = Y[val_cutoff:]
 
-    num_training_iterations = 3000
-    reg_alpha = 0.01
-    learning_rate = 0.1
+    num_training_iterations = 15000
+    reg_alpha = 0.001
+    val_accuracy = 0.0
+    # Heuristic learning rate, based on what we observe during training.
+    learning_rate = 0.1 if val_accuracy < 0.25 else 0.01 if val_accuracy < 0.28 else 0.001
     for i in range(num_training_iterations):
         # Grab a minibatch.
         batch_size = 200
@@ -204,7 +206,7 @@ def main():
     print(output.shape)
 
     mlp = train_model(mlp, X, Y, g)
-    sample_from_model(mlp, g=g, num_samples=10, context_size=context_size, stoi=stoi)
+    sample_from_model(mlp, g=g, num_samples=20, context_size=context_size, stoi=stoi)
 
 
 if __name__ == "__main__":
