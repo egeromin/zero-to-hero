@@ -7,7 +7,6 @@ https://www.jmlr.org/papers/volume3/bengio03a/bengio03a.pdf
 import itertools
 from pathlib import Path
 from typing import Mapping
-import time
 
 import torch
 import torch.nn.functional as F
@@ -120,7 +119,7 @@ def train_model(mlp: MLP, X: torch.Tensor, Y: torch.Tensor, g: torch.Generator) 
     X_test = X[val_cutoff:, :]
     Y_test = Y[val_cutoff:]
 
-    num_training_iterations = 10000
+    num_training_iterations = 3000
     reg_alpha = 0.01
     learning_rate = 0.1
     for i in range(num_training_iterations):
@@ -179,14 +178,12 @@ def sample_from_model(
             x = torch.tensor([stoi[c] for c in current_ctx], dtype=torch.long).view(
                 1, -1
             )
-            print(x)
             logits = mlp.forward(x)
-            pred_int = logits.argmax(dim=-1).item()
-            pred = itos[pred_int]
+            probs = F.softmax(logits, dim=-1)
+            sampled_idx = torch.multinomial(probs, num_samples=1, generator=g)
+            pred = itos[sampled_idx.item()]
             preds.append(pred)
             current_ctx = current_ctx[1:] + pred
-            print(current_ctx)
-            time.sleep(0.5)
         generated_sample = "".join(preds)
         print(f"{generated_sample=}")
 
