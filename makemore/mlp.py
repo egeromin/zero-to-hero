@@ -120,12 +120,12 @@ def train_model(mlp: MLP, X: torch.Tensor, Y: torch.Tensor, g: torch.Generator) 
     X_test = X[val_cutoff:, :]
     Y_test = Y[val_cutoff:]
 
-    num_training_iterations = 1800
+    num_training_iterations = 10000
     reg_alpha = 0.01
     learning_rate = 0.1
     for i in range(num_training_iterations):
         # Grab a minibatch.
-        batch_size = 100
+        batch_size = 200
         batch_idx = torch.randperm(len(X_train), generator=g)[:batch_size]
         X_batch = X_train[batch_idx]
         Y_batch = Y_train[batch_idx]
@@ -134,7 +134,7 @@ def train_model(mlp: MLP, X: torch.Tensor, Y: torch.Tensor, g: torch.Generator) 
 
         mlp.zero_grad()
         logits_batch = mlp.forward(X_batch)
-        model_loss = F.cross_entropy(logits_batch, Y_batch) / batch_size
+        model_loss = F.cross_entropy(logits_batch, Y_batch)
         reg_loss = reg_alpha * ((mlp.hidden_w**2).sum() + (mlp.output_w**2).sum())
 
         loss = model_loss + reg_loss
@@ -145,7 +145,7 @@ def train_model(mlp: MLP, X: torch.Tensor, Y: torch.Tensor, g: torch.Generator) 
             # Calculate the validation accuracy
             val_logits = mlp.forward(X_val)
             val_predictions = val_logits.argmax(dim=-1)
-            print(val_predictions)
+            # print(val_predictions)
             assert val_predictions.shape == Y_val.shape
             val_accuracy = sum(val_predictions == Y_val) / Y_val.shape[0]
             print(
