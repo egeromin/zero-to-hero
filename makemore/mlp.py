@@ -14,9 +14,9 @@ from matplotlib import pyplot as plt
 
 
 # Steps:
-# -1. Fix validation and test losses and accuracy to use no_grad.
-# 0. Print a graph of validation losses over epochs.
-# 1. Iterate on parameters to achieve a low loss.
+# -1. Fix validation and test losses and accuracy to use no_grad.  ✅
+# 0. Print a graph of training and validation losses over epochs.  ✅
+# 1. Iterate on parameters to achieve a low loss.  ✅
 # 2. Plot the activation, gradient and update statistics at each layer.
 # 3. Fix the initialisation using manual scaling factors:
 #     a. First, the initial loss
@@ -154,17 +154,12 @@ def train_model(mlp: MLP, X: torch.Tensor, Y: torch.Tensor, g: torch.Generator) 
     X_test = X[val_cutoff:, :]
     Y_test = Y[val_cutoff:]
 
-    num_training_iterations = 2000
-    val_accuracy = 0.0
+    num_training_iterations = 200_000
     val_losses: list[tuple[int, float]] = []
-    # Heuristic learning rate, based on what we observe during training.
-    learning_rate = (
-        0.1 if val_accuracy < 0.25 else 0.01 if val_accuracy < 0.28 else 0.001
-    )
     batch_losses: list[float] = []
     for i in range(num_training_iterations):
         # Grab a minibatch.
-        batch_size = 200
+        batch_size = 32
         batch_idx = torch.randperm(len(X_train), generator=g)[:batch_size]
         X_batch = X_train[batch_idx]
         Y_batch = Y_train[batch_idx]
@@ -176,10 +171,13 @@ def train_model(mlp: MLP, X: torch.Tensor, Y: torch.Tensor, g: torch.Generator) 
         loss = calculate_loss(mlp, logits_batch, Y_batch)
         batch_losses.append(loss.item())
         loss.backward()
+
+        # Heuristic learning rate
+        learning_rate = 0.1 if i < 100_000 else 0.01
         mlp.update_parameters(learning_rate)
 
         # Calculate the validation accuracy
-        if i % 100 == 0:
+        if i % 4000 == 0:
             val_loss, val_accuracy = calculate_loss_and_accuracy(mlp, X_val, Y_val)
             val_losses.append((i, val_loss))
             print(
@@ -247,7 +245,7 @@ def main():
         vocab_size=len(stoi),
         context_size=context_size,
         embedding_size=11,
-        hidden_size=13,
+        hidden_size=200,
         g=g,
     )
     output = mlp.forward(X[:20, :])
