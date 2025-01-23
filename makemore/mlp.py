@@ -10,6 +10,20 @@ from typing import Mapping
 
 import torch
 import torch.nn.functional as F
+from matplotlib import pyplot as plt
+
+
+# Steps:
+# -1. Fix validation and test losses and accuracy to use no_grad.
+# 0. Print a graph of validation losses over epochs.
+# 1. Iterate on parameters to achieve a low loss.
+# 2. Plot the activation, gradient and update statistics at each layer.
+# 3. Fix the initialisation using manual scaling factors:
+#     a. First, the initial loss
+#     b. Then, the saturated tanh
+# 4. Use kaiming initialisation and compare
+# 5. Implement the variants of batch norm by hand.
+# 6. Pytorchify the code.
 
 
 def load_dataset(context_size: int):
@@ -100,6 +114,27 @@ class MLP:
         self.output_b.data -= learning_rate * self.output_b.grad
 
 
+@torch.no_grad()
+def calculate_loss_and_accuracy(
+    mlp: MLP, X: torch.Tensor, Y: torch.Tensor
+) -> tuple[float, float]:
+    """Returns a tuple (loss, accuracy)"""
+    logits = mlp.forward(X)
+    predictions = logits.argmax(dim=-1)
+    assert predictions.shape == Y.shape
+    accuracy = sum(predictions == Y) / Y.shape[0]
+    loss = calculate_loss(mlp, logits, Y)
+    return loss.item(), accuracy
+
+
+def calculate_loss(mlp: MLP, logits: torch.Tensor, Y: torch.Tensor) -> torch.Tensor:
+    reg_alpha = 0.001
+    model_loss = F.cross_entropy(logits, Y)
+    reg_loss = reg_alpha * ((mlp.hidden_w**2).sum() + (mlp.output_w**2).sum())
+    loss = model_loss + reg_loss
+    return loss
+
+
 def train_model(mlp: MLP, X: torch.Tensor, Y: torch.Tensor, g: torch.Generator) -> MLP:
     assert X.shape[0] == Y.shape[0]
     # split into train, test and validation sets
@@ -119,11 +154,13 @@ def train_model(mlp: MLP, X: torch.Tensor, Y: torch.Tensor, g: torch.Generator) 
     X_test = X[val_cutoff:, :]
     Y_test = Y[val_cutoff:]
 
-    num_training_iterations = 15000
-    reg_alpha = 0.001
+    num_training_iterations = 2000
     val_accuracy = 0.0
+    val_losses: list[tuple[int, float]] = []
     # Heuristic learning rate, based on what we observe during training.
-    learning_rate = 0.1 if val_accuracy < 0.25 else 0.01 if val_accuracy < 0.28 else 0.001
+    learning_rate = (
+        0.1 if val_accuracy < 0.25 else 0.01 if val_accuracy < 0.28 else 0.001
+    )
     for i in range(num_training_iterations):
         # Grab a minibatch.
         batch_size = 200
@@ -135,31 +172,30 @@ def train_model(mlp: MLP, X: torch.Tensor, Y: torch.Tensor, g: torch.Generator) 
 
         mlp.zero_grad()
         logits_batch = mlp.forward(X_batch)
-        model_loss = F.cross_entropy(logits_batch, Y_batch)
-        reg_loss = reg_alpha * ((mlp.hidden_w**2).sum() + (mlp.output_w**2).sum())
-
-        loss = model_loss + reg_loss
+        loss = calculate_loss(mlp, logits_batch, Y_batch)
         loss.backward()
         mlp.update_parameters(learning_rate)
 
+        # Calculate the validation accuracy
         if i % 100 == 0:
-            # Calculate the validation accuracy
-            val_logits = mlp.forward(X_val)
-            val_predictions = val_logits.argmax(dim=-1)
-            # print(val_predictions)
-            assert val_predictions.shape == Y_val.shape
-            val_accuracy = sum(val_predictions == Y_val) / Y_val.shape[0]
+            val_loss, val_accuracy = calculate_loss_and_accuracy(mlp, X_val, Y_val)
+            val_losses.append((i, val_loss))
             print(
-                f"Step {i}: loss = {loss.item():.4f}, validation accuracy = {val_accuracy * 100:.2f}%"
+                f"Step {i}: validation loss = {val_loss:.4f}, "
+                f"validation accuracy = {val_accuracy * 100:.2f}%"
             )
 
     # Calculate the final test accuracy.
-    # TODO: extract the below into a standalone function.
-    test_logits = mlp.forward(X_test)
-    test_predictions = test_logits.argmax(dim=-1)
-    assert test_predictions.shape == Y_test.shape
-    test_accuracy = sum(test_predictions == Y_test) / Y_test.shape[0]
-    print(f"Final test accuracy = {test_accuracy * 100:.2f}%")
+    test_loss, test_accuracy = calculate_loss_and_accuracy(mlp, X_test, Y_test)
+    print(
+        f"Final test loss = {test_loss:.4f}, test accuracy = {test_accuracy * 100:.2f}%"
+    )
+
+    x, y = zip(*val_losses)
+    plt.plot(x, y)
+    plt.xlabel("Training iteration")
+    plt.ylabel("Validation loss")
+    plt.show()
 
     return mlp
 
