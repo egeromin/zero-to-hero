@@ -161,6 +161,7 @@ def train_model(mlp: MLP, X: torch.Tensor, Y: torch.Tensor, g: torch.Generator) 
     learning_rate = (
         0.1 if val_accuracy < 0.25 else 0.01 if val_accuracy < 0.28 else 0.001
     )
+    batch_losses: list[float] = []
     for i in range(num_training_iterations):
         # Grab a minibatch.
         batch_size = 200
@@ -173,6 +174,7 @@ def train_model(mlp: MLP, X: torch.Tensor, Y: torch.Tensor, g: torch.Generator) 
         mlp.zero_grad()
         logits_batch = mlp.forward(X_batch)
         loss = calculate_loss(mlp, logits_batch, Y_batch)
+        batch_losses.append(loss.item())
         loss.backward()
         mlp.update_parameters(learning_rate)
 
@@ -191,10 +193,20 @@ def train_model(mlp: MLP, X: torch.Tensor, Y: torch.Tensor, g: torch.Generator) 
         f"Final test loss = {test_loss:.4f}, test accuracy = {test_accuracy * 100:.2f}%"
     )
 
+    fig, axes = plt.subplots(nrows=1, ncols=2, figsize=(8, 4))
+
+    axes[0].plot(range(len(batch_losses)), batch_losses)
+    axes[0].set_xlabel("Training iteration")
+    axes[0].set_ylabel("Train loss")
+    axes[0].legend()
+
     x, y = zip(*val_losses)
-    plt.plot(x, y)
-    plt.xlabel("Training iteration")
-    plt.ylabel("Validation loss")
+    axes[1].plot(x, y)
+    axes[1].set_xlabel("Training iteration")
+    axes[1].set_ylabel("Validation loss")
+    axes[1].legend()
+
+    plt.tight_layout()
     plt.show()
 
     return mlp
