@@ -163,9 +163,12 @@ def train_model(mlp: MLP, X: torch.Tensor, Y: torch.Tensor, g: torch.Generator) 
     X_test = X[val_cutoff:, :]
     Y_test = Y[val_cutoff:]
 
+    # Prepare axes for the mega debug plots
+    fig, axes = plt.subplots(nrows=2, ncols=2, figsize=(8, 8))
+
     # num_training_iterations = 200_000
     # While iterating, revert to a lower number of iterations.
-    num_training_iterations = 20_000
+    num_training_iterations = 4_001
     val_losses: list[tuple[int, float]] = []
     batch_losses: list[float] = []
     for i in range(num_training_iterations):
@@ -181,10 +184,13 @@ def train_model(mlp: MLP, X: torch.Tensor, Y: torch.Tensor, g: torch.Generator) 
         logits_batch = mlp.forward(X_batch)
 
         if i in (0, num_training_iterations - 1):
+            plot_num = 0 if i == 0 else 1
             activations = mlp.hidden_nonlin.view(-1)
             hy, hx = torch.histogram(activations, density=True)
-            plt.plot(hx[:-1].detach(), hy.detach())
-            plt.show()
+            axes[0][plot_num].plot(hx[:-1].detach(), hy.detach())
+            axes[0][plot_num].set_title(f"Activations of hidden layer at iteration {i}")
+            axes[0][plot_num].set_xlabel("Activation value")
+            axes[0][plot_num].set_ylabel("Activation density")
 
         loss = calculate_loss(mlp, logits_batch, Y_batch)
         batch_losses.append(loss.log10().item())
@@ -209,18 +215,16 @@ def train_model(mlp: MLP, X: torch.Tensor, Y: torch.Tensor, g: torch.Generator) 
         f"Final test loss = {test_loss:.4f}, test accuracy = {test_accuracy * 100:.2f}%"
     )
 
-    fig, axes = plt.subplots(nrows=1, ncols=2, figsize=(8, 4))
-
-    axes[0].plot(range(len(batch_losses)), batch_losses)
-    axes[0].set_xlabel("Training iteration")
-    axes[0].set_ylabel("Train loss")
-    axes[0].legend()
+    axes[1][0].plot(range(len(batch_losses)), batch_losses)
+    axes[1][0].set_xlabel("Training iteration")
+    axes[1][0].set_ylabel("Log10 Train loss")
+    axes[1][0].set_title("Log10 training losses during the training")
 
     x, y = zip(*val_losses)
-    axes[1].plot(x, y)
-    axes[1].set_xlabel("Training iteration")
-    axes[1].set_ylabel("Validation loss")
-    axes[1].legend()
+    axes[1][1].plot(x, y)
+    axes[1][1].set_xlabel("Training iteration")
+    axes[1][1].set_ylabel("Log10 Validation loss")
+    axes[1][1].set_title("Log10 validation losses during the training")
 
     plt.tight_layout()
     plt.show()
