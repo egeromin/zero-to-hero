@@ -5,6 +5,7 @@ https://www.jmlr.org/papers/volume3/bengio03a/bengio03a.pdf
 """
 
 import itertools
+import math
 from pathlib import Path
 from typing import Mapping
 
@@ -18,6 +19,12 @@ from matplotlib import pyplot as plt
 # 0. Print a graph of training and validation losses over epochs.  ✅
 # 1. Iterate on parameters to achieve a low loss.  ✅
 # 2. Plot the activation, gradient and update statistics at each layer.
+#     Start with the activations after the first tanh layer, bucketed.  ✅
+#     Change to use density, like in the lecture.  ✅
+#     Try to recall other statistics: they were Gaussian: what were they? Activation, gradient and update statistics, indeed. Bell-shaped?
+#     Add an additional tanh layer to test deeper networks, add activation and saturation stats at each stage.
+#     Add gradient and update stats.
+#     Re-train the deeper NN end to end.
 # 3. Fix the initialisation using manual scaling factors:
 #     a. First, the initial loss
 #     b. Then, the saturated tanh
@@ -87,6 +94,7 @@ class MLP:
         self.output_b: torch.Tensor = torch.zeros(
             size=(vocab_size,), requires_grad=True, dtype=torch.float
         )
+        self.hidden_nonlin = None  # activations after the first tanh
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         # Forward pass. Do not compute the final softmax,
@@ -96,6 +104,7 @@ class MLP:
         embeddings_reshaped = embeddings.view(embeddings.shape[0], -1)
         hidden = embeddings_reshaped @ self.hidden_w + self.hidden_b
         hidden_nonlin = hidden.tanh()
+        self.hidden_nonlin = hidden_nonlin  # activations after the tanh layer
         output = hidden_nonlin @ self.output_w + self.output_b
         return output
 
@@ -154,7 +163,9 @@ def train_model(mlp: MLP, X: torch.Tensor, Y: torch.Tensor, g: torch.Generator) 
     X_test = X[val_cutoff:, :]
     Y_test = Y[val_cutoff:]
 
-    num_training_iterations = 200_000
+    # num_training_iterations = 200_000
+    # While iterating, revert to a lower number of iterations.
+    num_training_iterations = 20_000
     val_losses: list[tuple[int, float]] = []
     batch_losses: list[float] = []
     for i in range(num_training_iterations):
@@ -168,8 +179,15 @@ def train_model(mlp: MLP, X: torch.Tensor, Y: torch.Tensor, g: torch.Generator) 
 
         mlp.zero_grad()
         logits_batch = mlp.forward(X_batch)
+
+        if i in (0, num_training_iterations - 1):
+            activations = mlp.hidden_nonlin.view(-1)
+            hy, hx = torch.histogram(activations, density=True)
+            plt.plot(hx[:-1].detach(), hy.detach())
+            plt.show()
+
         loss = calculate_loss(mlp, logits_batch, Y_batch)
-        batch_losses.append(loss.item())
+        batch_losses.append(loss.log10().item())
         loss.backward()
 
         # Heuristic learning rate
@@ -179,7 +197,7 @@ def train_model(mlp: MLP, X: torch.Tensor, Y: torch.Tensor, g: torch.Generator) 
         # Calculate the validation accuracy
         if i % 4000 == 0:
             val_loss, val_accuracy = calculate_loss_and_accuracy(mlp, X_val, Y_val)
-            val_losses.append((i, val_loss))
+            val_losses.append((i, math.log10(val_loss)))
             print(
                 f"Step {i}: validation loss = {val_loss:.4f}, "
                 f"validation accuracy = {val_accuracy * 100:.2f}%"
