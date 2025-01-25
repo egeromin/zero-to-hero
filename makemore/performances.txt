@@ -1,3 +1,8 @@
 Before fixing initialisations
 Step 196000: validation loss = 2.2601, validation accuracy = 32.07%
 Final test loss = 2.2696, test accuracy = 31.82%
+
+After adding embedding into regularisation
+Step 200000: validation loss = 2.4116, validation accuracy = 29.29%
+Final test loss = 2.4192, test accuracy = 28.95%
+
