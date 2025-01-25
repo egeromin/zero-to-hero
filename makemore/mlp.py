@@ -21,9 +21,8 @@ from matplotlib import pyplot as plt
 # 2. Plot the activation, gradient and update statistics at each layer.
 #     Start with the activations after the first tanh layer, bucketed.  ✅
 #     Change to use density, like in the lecture.  ✅
-#     Try to recall other statistics: they were Gaussian: what were they? Activation, gradient and update statistics, indeed. Bell-shaped?
+#     Add gradient and update stats.  ✅
 #     Add an additional tanh layer to test deeper networks, add activation and saturation stats at each stage.
-#     Add gradient and update stats.
 #     Re-train the deeper NN end to end.
 # 3. Fix the initialisation using manual scaling factors:
 #     a. First, the initial loss
@@ -96,16 +95,17 @@ class MLP:
         )
         self.hidden_nonlin = None  # activations after the first tanh
 
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
+    def forward(self, x: torch.Tensor, training: bool = True) -> torch.Tensor:
         # Forward pass. Do not compute the final softmax,
         # as this will be calculated inside the loss function,
         # for numerical stability.
         embeddings = self.embedding[x]
         embeddings_reshaped = embeddings.view(embeddings.shape[0], -1)
         hidden = embeddings_reshaped @ self.hidden_w + self.hidden_b
-        hidden_nonlin = hidden.tanh()
-        self.hidden_nonlin = hidden_nonlin  # activations after the tanh layer
-        output = hidden_nonlin @ self.output_w + self.output_b
+        self.hidden_nonlin = hidden.tanh()  # activations after the tanh layer
+        if training:
+            self.hidden_nonlin.retain_grad()  # To ensure that the grad is retained on this non-leaf tensor
+        output = self.hidden_nonlin @ self.output_w + self.output_b
         return output
 
     def zero_grad(self):
@@ -128,7 +128,7 @@ def calculate_loss_and_accuracy(
     mlp: MLP, X: torch.Tensor, Y: torch.Tensor
 ) -> tuple[float, float]:
     """Returns a tuple (loss, accuracy)"""
-    logits = mlp.forward(X)
+    logits = mlp.forward(X, training=False)
     predictions = logits.argmax(dim=-1)
     assert predictions.shape == Y.shape
     accuracy = sum(predictions == Y) / Y.shape[0]
@@ -164,13 +164,14 @@ def train_model(mlp: MLP, X: torch.Tensor, Y: torch.Tensor, g: torch.Generator) 
     Y_test = Y[val_cutoff:]
 
     # Prepare axes for the mega debug plots
-    fig, axes = plt.subplots(nrows=2, ncols=2, figsize=(8, 8))
+    fig, axes = plt.subplots(nrows=4, ncols=2, figsize=(10, 16))
 
     # num_training_iterations = 200_000
     # While iterating, revert to a lower number of iterations.
     num_training_iterations = 4_001
     val_losses: list[tuple[int, float]] = []
     batch_losses: list[float] = []
+    update_ratios: list[float] = []
     for i in range(num_training_iterations):
         # Grab a minibatch.
         batch_size = 32
@@ -182,22 +183,62 @@ def train_model(mlp: MLP, X: torch.Tensor, Y: torch.Tensor, g: torch.Generator) 
 
         mlp.zero_grad()
         logits_batch = mlp.forward(X_batch)
-
-        if i in (0, num_training_iterations - 1):
-            plot_num = 0 if i == 0 else 1
-            activations = mlp.hidden_nonlin.view(-1)
-            hy, hx = torch.histogram(activations, density=True)
-            axes[0][plot_num].plot(hx[:-1].detach(), hy.detach())
-            axes[0][plot_num].set_title(f"Activations of hidden layer at iteration {i}")
-            axes[0][plot_num].set_xlabel("Activation value")
-            axes[0][plot_num].set_ylabel("Activation density")
-
         loss = calculate_loss(mlp, logits_batch, Y_batch)
         batch_losses.append(loss.log10().item())
         loss.backward()
 
+        if i in (0, num_training_iterations - 1):
+            plot_num = 0 if i == 0 else 1
+
+            # Plot activation statistics
+            activations = mlp.hidden_nonlin.view(-1)
+            hy, hx = torch.histogram(activations, density=True)
+            axes[plot_num][0].plot(hx[:-1].detach(), hy.detach())
+            axes[plot_num][0].set_title(f"Activations of hidden layer at iteration {i}")
+            axes[plot_num][0].set_xlabel("Activation value")
+            axes[plot_num][0].set_ylabel("Activation density")
+
+            # Print mean, std, and saturation statistics
+            print(
+                f"Hidden layer mean = {activations.mean().item()}, std = {activations.std().item()}, "
+                f"saturation %  = {(activations > 0.97).float().mean().item() * 100:.2f}"
+            )
+
+            # Plot gradient statistics
+            gradients = mlp.hidden_nonlin.grad.view(-1)
+            hy, hx = torch.histogram(gradients, density=True)
+            axes[plot_num][1].plot(hx[:-1].detach(), hy.detach())
+            axes[plot_num][1].set_title(f"Gradients of hidden layer at iteration {i}")
+            axes[plot_num][1].set_xlabel("Gradient value")
+            axes[plot_num][1].set_ylabel("Gradient density")
+
+            # Print mean, std, and saturation statistics
+            print(
+                f"Hidden layer gradient mean = {gradients.mean().item()}, std = {gradients.std().item()}, "
+                f"saturation %  = {(gradients > 0.97).float().mean().item() * 100:.2f}"
+            )
+
         # Heuristic learning rate
         learning_rate = 0.1 if i < 100_000 else 0.01
+
+        # Keep track of update / weight ratio statistics for each iteration
+        with torch.no_grad():
+            # Calculate the ratio of the the std-dev of the gradients,
+            # to the std-dev of the weights. We want to get a sense of whether the
+            # updates we're doing are the right size.
+            # Why the std-dev? Because, we get a measure of the range of values
+            # that are taken, since weights and their grads will be both positive
+            # and negative, symmetrically, since we're using tanh.
+            # Alternatively, could also use the ratio of mean absolute values
+            # to achieve a similar plot
+            ratio = learning_rate * mlp.hidden_w.grad.std() / mlp.hidden_w.std()
+            # variant, also works:
+            # ratio = learning_rate * mlp.hidden_w.grad.abs().mean() / mlp.hidden_w.abs().mean()
+            # The following does not work so well, since it's too much influenced by outliers:
+            # ratios = learning_rate * mlp.hidden_w.grad.view(-1) / mlp.hidden_w.view(-1)
+            # ratio = ratios.mean()
+            update_ratios.append(ratio.log10().item())
+
         mlp.update_parameters(learning_rate)
 
         # Calculate the validation accuracy
@@ -215,16 +256,21 @@ def train_model(mlp: MLP, X: torch.Tensor, Y: torch.Tensor, g: torch.Generator) 
         f"Final test loss = {test_loss:.4f}, test accuracy = {test_accuracy * 100:.2f}%"
     )
 
-    axes[1][0].plot(range(len(batch_losses)), batch_losses)
-    axes[1][0].set_xlabel("Training iteration")
-    axes[1][0].set_ylabel("Log10 Train loss")
-    axes[1][0].set_title("Log10 training losses during the training")
+    axes[2][0].plot(range(len(batch_losses)), batch_losses)
+    axes[2][0].set_xlabel("Training iteration")
+    axes[2][0].set_ylabel("Log10 Train loss")
+    axes[2][0].set_title("Log10 training losses during the training")
 
     x, y = zip(*val_losses)
-    axes[1][1].plot(x, y)
-    axes[1][1].set_xlabel("Training iteration")
-    axes[1][1].set_ylabel("Log10 Validation loss")
-    axes[1][1].set_title("Log10 validation losses during the training")
+    axes[2][1].plot(x, y)
+    axes[2][1].set_xlabel("Training iteration")
+    axes[2][1].set_ylabel("Log10 Validation loss")
+    axes[2][1].set_title("Log10 validation losses during the training")
+
+    axes[3][0].plot(range(len(update_ratios)), update_ratios)
+    axes[3][0].set_xlabel("Training iteration")
+    axes[3][0].set_ylabel("Average update ratio at hidden layer")
+    axes[3][0].set_title("Average update ratios")
 
     plt.tight_layout()
     plt.show()
