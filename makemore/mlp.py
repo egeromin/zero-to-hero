@@ -23,12 +23,12 @@ from matplotlib import pyplot as plt
 #     Start with the activations after the first tanh layer, bucketed.  ✅
 #     Change to use density, like in the lecture.  ✅
 #     Add gradient and update stats.  ✅
-# 3. Pytorchify the code.
-#     Add an additional tanh layer to test deeper networks, add activation and saturation stats at each stage.
-#     Re-train the deeper NN end to end.
-# 4. Fix the initialisation using manual scaling factors:
-#     a. First, the initial loss
-#     b. Then, the saturated tanh
+# 3. Pytorchify the code.  ✅
+#     Add an additional tanh layer to test deeper networks, add activation and saturation stats at each stage.  ✅
+#     Re-train the deeper NN end to end.  ✅
+# 4. Fix the initialisation using manual scaling factors:  ✅
+#     a. First, the initial loss ✅
+#     b. Then, the saturated tanh ✅
 # 5. Use kaiming initialisation and compare
 # 6. Implement the variants of batch norm by hand and then show results.
 
@@ -76,12 +76,16 @@ class Linear:
         output_size: int,
         generator: torch.Generator,
         bias: bool = True,
+        scale_factor: float = 1.0,
     ):
-        self.weights: torch.Tensor = torch.randn(
-            size=(input_size, output_size),
-            requires_grad=True,
-            generator=generator,
+        self.weights: torch.Tensor = (
+            torch.randn(
+                size=(input_size, output_size),
+                generator=generator,
+            )
+            * scale_factor
         )
+        self.weights.requires_grad = True
         self.bias: torch.Tensor | None = None
         if bias:
             self.bias: torch.Tensor = torch.zeros(
@@ -95,6 +99,8 @@ class Linear:
         if self.bias is not None:
             self.out += self.bias
         if training:
+            # The following are not "leaf tensors" and therefore must be explicitly instructed
+            # to retain "tensor.grad".
             self.out.retain_grad()
         return self.out
 
@@ -130,13 +136,18 @@ class MLP:
             size=(vocab_size, embedding_size), requires_grad=True, generator=g
         )
         self.layers = [
-            Linear(embedding_size * context_size, hidden_size, generator=g),
+            Linear(
+                embedding_size * context_size,
+                hidden_size,
+                generator=g,
+                scale_factor=0.1,
+            ),
             Tanh(),
-            Linear(hidden_size, hidden_size, generator=g),
+            Linear(hidden_size, hidden_size, generator=g, scale_factor=0.1),
             Tanh(),
-            Linear(hidden_size, hidden_size, generator=g),
+            Linear(hidden_size, hidden_size, generator=g, scale_factor=0.1),
             Tanh(),
-            Linear(hidden_size, vocab_size, generator=g),
+            Linear(hidden_size, vocab_size, generator=g, scale_factor=0.1),
         ]
 
     def forward(self, x: torch.Tensor, training: bool = True) -> torch.Tensor:
