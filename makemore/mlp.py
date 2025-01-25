@@ -6,8 +6,9 @@ https://www.jmlr.org/papers/volume3/bengio03a/bengio03a.pdf
 
 import itertools
 import math
+from collections import defaultdict
 from pathlib import Path
-from typing import Mapping
+from typing import Mapping, Iterable
 
 import torch
 import torch.nn.functional as F
@@ -22,14 +23,14 @@ from matplotlib import pyplot as plt
 #     Start with the activations after the first tanh layer, bucketed.  ✅
 #     Change to use density, like in the lecture.  ✅
 #     Add gradient and update stats.  ✅
+# 3. Pytorchify the code.
 #     Add an additional tanh layer to test deeper networks, add activation and saturation stats at each stage.
 #     Re-train the deeper NN end to end.
-# 3. Fix the initialisation using manual scaling factors:
+# 4. Fix the initialisation using manual scaling factors:
 #     a. First, the initial loss
 #     b. Then, the saturated tanh
-# 4. Use kaiming initialisation and compare
-# 5. Implement the variants of batch norm by hand.
-# 6. Pytorchify the code.
+# 5. Use kaiming initialisation and compare
+# 6. Implement the variants of batch norm by hand and then show results.
 
 
 def load_dataset(context_size: int):
@@ -67,6 +68,55 @@ def load_dataset(context_size: int):
     return X, Y, stoi
 
 
+# Define the layers we'll use: Linear, Tanh and Softmax
+class Linear:
+    def __init__(
+        self,
+        input_size: int,
+        output_size: int,
+        generator: torch.Generator,
+        bias: bool = True,
+    ):
+        self.weights: torch.Tensor = torch.randn(
+            size=(input_size, output_size),
+            requires_grad=True,
+            generator=generator,
+        )
+        self.bias: torch.Tensor | None = None
+        if bias:
+            self.bias: torch.Tensor = torch.zeros(
+                size=(output_size,),
+                requires_grad=True,
+                dtype=torch.float,
+            )
+
+    def __call__(self, X: torch.Tensor, training: bool = True) -> torch.Tensor:
+        self.out = X @ self.weights
+        if self.bias is not None:
+            self.out += self.bias
+        if training:
+            self.out.retain_grad()
+        return self.out
+
+    def parameters(self) -> Iterable[torch.Tensor]:
+        yield self.weights
+        if self.bias is not None:
+            yield self.bias
+
+
+class Tanh:
+    def __call__(self, X: torch.Tensor, training: bool = True) -> torch.Tensor:
+        self.out = X.tanh()
+        if training:
+            self.out.retain_grad()
+        return self.out
+
+    def parameters(self) -> Iterable[torch.Tensor]:
+        # Simple way to define an empty iterator
+        return
+        yield
+
+
 class MLP:
     def __init__(
         self,
@@ -79,21 +129,26 @@ class MLP:
         self.embedding: torch.Tensor = torch.randn(
             size=(vocab_size, embedding_size), requires_grad=True, generator=g
         )
-        self.hidden_w: torch.Tensor = torch.randn(
-            size=(embedding_size * context_size, hidden_size),
-            requires_grad=True,
-            generator=g,
-        )
-        self.hidden_b: torch.Tensor = torch.zeros(
-            size=(hidden_size,), requires_grad=True, dtype=torch.float
-        )
-        self.output_w: torch.Tensor = torch.randn(
-            size=(hidden_size, vocab_size), requires_grad=True, generator=g
-        )
-        self.output_b: torch.Tensor = torch.zeros(
-            size=(vocab_size,), requires_grad=True, dtype=torch.float
-        )
-        self.hidden_nonlin = None  # activations after the first tanh
+        self.layers = [
+            Linear(embedding_size * context_size, hidden_size, generator=g),
+            Tanh(),
+            Linear(hidden_size, vocab_size, generator=g),
+        ]
+        # self.hidden_w: torch.Tensor = torch.randn(
+        #     size=(embedding_size * context_size, hidden_size),
+        #     requires_grad=True,
+        #     generator=g,
+        # )
+        # self.hidden_b: torch.Tensor = torch.zeros(
+        #     size=(hidden_size,), requires_grad=True, dtype=torch.float
+        # )
+        # self.output_w: torch.Tensor = torch.randn(
+        #     size=(hidden_size, vocab_size), requires_grad=True, generator=g
+        # )
+        # self.output_b: torch.Tensor = torch.zeros(
+        #     size=(vocab_size,), requires_grad=True, dtype=torch.float
+        # )
+        # self.hidden_nonlin = None  # activations after the first tanh
 
     def forward(self, x: torch.Tensor, training: bool = True) -> torch.Tensor:
         # Forward pass. Do not compute the final softmax,
@@ -101,26 +156,23 @@ class MLP:
         # for numerical stability.
         embeddings = self.embedding[x]
         embeddings_reshaped = embeddings.view(embeddings.shape[0], -1)
-        hidden = embeddings_reshaped @ self.hidden_w + self.hidden_b
-        self.hidden_nonlin = hidden.tanh()  # activations after the tanh layer
-        if training:
-            self.hidden_nonlin.retain_grad()  # To ensure that the grad is retained on this non-leaf tensor
-        output = self.hidden_nonlin @ self.output_w + self.output_b
+        output = embeddings_reshaped
+        for layer in self.layers:
+            output = layer(output, training=training)
         return output
 
+    def parameters(self) -> Iterable[torch.Tensor]:
+        yield self.embedding
+        for layer in self.layers:
+            yield from layer.parameters()
+
     def zero_grad(self):
-        self.embedding.grad = None
-        self.hidden_w.grad = None
-        self.hidden_b.grad = None
-        self.output_w.grad = None
-        self.output_b.grad = None
+        for parameter in self.parameters():
+            parameter.grad = None
 
     def update_parameters(self, learning_rate: float):
-        self.embedding.data -= learning_rate * self.embedding.grad
-        self.hidden_w.data -= learning_rate * self.hidden_w.grad
-        self.hidden_b.data -= learning_rate * self.hidden_b.grad
-        self.output_w.data -= learning_rate * self.output_w.grad
-        self.output_b.data -= learning_rate * self.output_b.grad
+        for parameter in self.parameters():
+            parameter.data -= learning_rate * parameter.data
 
 
 @torch.no_grad()
@@ -139,7 +191,9 @@ def calculate_loss_and_accuracy(
 def calculate_loss(mlp: MLP, logits: torch.Tensor, Y: torch.Tensor) -> torch.Tensor:
     reg_alpha = 0.001
     model_loss = F.cross_entropy(logits, Y)
-    reg_loss = reg_alpha * ((mlp.hidden_w**2).sum() + (mlp.output_w**2).sum())
+    reg_loss = reg_alpha * sum(
+        (param**2).sum() for param in mlp.parameters() if param.dim() == 2
+    )
     loss = model_loss + reg_loss
     return loss
 
@@ -171,7 +225,7 @@ def train_model(mlp: MLP, X: torch.Tensor, Y: torch.Tensor, g: torch.Generator) 
     num_training_iterations = 4_001
     val_losses: list[tuple[int, float]] = []
     batch_losses: list[float] = []
-    update_ratios: list[float] = []
+    update_ratios: Mapping[int, list[float]] = defaultdict(list)
     for i in range(num_training_iterations):
         # Grab a minibatch.
         batch_size = 32
@@ -187,43 +241,51 @@ def train_model(mlp: MLP, X: torch.Tensor, Y: torch.Tensor, g: torch.Generator) 
         batch_losses.append(loss.log10().item())
         loss.backward()
 
-        if i in (0, num_training_iterations - 1):
-            plot_num = 0 if i == 0 else 1
-
-            # Plot activation statistics
-            activations = mlp.hidden_nonlin.view(-1)
-            hy, hx = torch.histogram(activations, density=True)
-            axes[plot_num][0].plot(hx[:-1].detach(), hy.detach())
-            axes[plot_num][0].set_title(f"Activations of hidden layer at iteration {i}")
-            axes[plot_num][0].set_xlabel("Activation value")
-            axes[plot_num][0].set_ylabel("Activation density")
-
-            # Print mean, std, and saturation statistics
-            print(
-                f"Hidden layer mean = {activations.mean().item()}, std = {activations.std().item()}, "
-                f"saturation %  = {(activations > 0.97).float().mean().item() * 100:.2f}"
-            )
-
-            # Plot gradient statistics
-            gradients = mlp.hidden_nonlin.grad.view(-1)
-            hy, hx = torch.histogram(gradients, density=True)
-            axes[plot_num][1].plot(hx[:-1].detach(), hy.detach())
-            axes[plot_num][1].set_title(f"Gradients of hidden layer at iteration {i}")
-            axes[plot_num][1].set_xlabel("Gradient value")
-            axes[plot_num][1].set_ylabel("Gradient density")
-
-            # Print mean, std, and saturation statistics
-            print(
-                f"Hidden layer gradient mean = {gradients.mean().item()}, std = {gradients.std().item()}, "
-                f"saturation %  = {(gradients > 0.97).float().mean().item() * 100:.2f}"
-            )
-
         # Heuristic learning rate
         learning_rate = 0.1 if i < 100_000 else 0.01
 
-        # Keep track of update / weight ratio statistics for each iteration
+        # Calculate statistics for plotting
         with torch.no_grad():
-            # Calculate the ratio of the the std-dev of the gradients,
+            if i in (0, num_training_iterations - 1):
+                plot_num = 0 if i == 0 else 1
+
+                # Plot gradient and activation statistics
+                axes[plot_num][0].set_title(
+                    f"Activations of hidden layer at iteration {i}"
+                )
+                axes[plot_num][0].set_xlabel("Activation value")
+                axes[plot_num][0].set_ylabel("Activation density")
+                axes[plot_num][1].set_title(
+                    f"Gradients of hidden layer at iteration {i}"
+                )
+                axes[plot_num][1].set_xlabel("Gradient value")
+                axes[plot_num][1].set_ylabel("Gradient density")
+                legends = []
+                for k, layer in enumerate(mlp.layers):
+                    if isinstance(layer, Tanh):
+                        legends.append(f"Layer {k}")
+                        activations = layer.out.view(-1)
+                        hy, hx = torch.histogram(activations, density=True)
+                        axes[plot_num][0].plot(hx[:-1].detach(), hy.detach())
+
+                        gradients = layer.out.grad.view(-1)
+                        hy, hx = torch.histogram(gradients, density=True)
+                        axes[plot_num][1].plot(hx[:-1].detach(), hy.detach())
+
+                        # Print mean, std, and saturation statistics
+                        print(
+                            f"Layer {k} mean = {activations.mean().item()}, std = {activations.std().item()}, "
+                            f"saturation %  = {(activations > 0.97).float().mean().item() * 100:.2f}"
+                        )
+                        print(
+                            f"Layer {k} gradient mean = {gradients.mean().item()}, std = {gradients.std().item()}, "
+                            f"saturation %  = {(gradients > 0.97).float().mean().item() * 100:.2f}"
+                        )
+                axes[plot_num][0].legend(legends)
+                axes[plot_num][1].legend(legends)
+
+            # Keep track of update / weight ratio statistics for each iteration
+            # Calculate the ratio of the std-dev of the gradients,
             # to the std-dev of the weights. We want to get a sense of whether the
             # updates we're doing are the right size.
             # Why the std-dev? Because, we get a measure of the range of values
@@ -231,13 +293,16 @@ def train_model(mlp: MLP, X: torch.Tensor, Y: torch.Tensor, g: torch.Generator) 
             # and negative, symmetrically, since we're using tanh.
             # Alternatively, could also use the ratio of mean absolute values
             # to achieve a similar plot
-            ratio = learning_rate * mlp.hidden_w.grad.std() / mlp.hidden_w.std()
-            # variant, also works:
-            # ratio = learning_rate * mlp.hidden_w.grad.abs().mean() / mlp.hidden_w.abs().mean()
-            # The following does not work so well, since it's too much influenced by outliers:
-            # ratios = learning_rate * mlp.hidden_w.grad.view(-1) / mlp.hidden_w.view(-1)
-            # ratio = ratios.mean()
-            update_ratios.append(ratio.log10().item())
+            for k, layer in enumerate(mlp.layers):
+                if isinstance(layer, Linear):
+                    weights = next(p for p in layer.parameters() if p.dim() == 2)
+                    ratio = learning_rate * weights.grad.std() / weights.std()
+                    # variant, also works:
+                    # ratio = learning_rate * weights.grad.abs().mean() / weights.abs().mean()
+                    # The following does not work so well, since it's too much influenced by outliers:
+                    # ratios = learning_rate * weights.grad.view(-1) / weights.view(-1)
+                    # ratio = ratios.mean()
+                update_ratios[k].append(ratio.log10().item())
 
         mlp.update_parameters(learning_rate)
 
@@ -267,10 +332,14 @@ def train_model(mlp: MLP, X: torch.Tensor, Y: torch.Tensor, g: torch.Generator) 
     axes[2][1].set_ylabel("Log10 Validation loss")
     axes[2][1].set_title("Log10 validation losses during the training")
 
-    axes[3][0].plot(range(len(update_ratios)), update_ratios)
+    legends = []
     axes[3][0].set_xlabel("Training iteration")
     axes[3][0].set_ylabel("Average update ratio at hidden layer")
     axes[3][0].set_title("Average update ratios")
+    for k, layer_update_ratios in update_ratios.items():
+        legends.append(f"Layer {k}")
+        axes[3][0].plot(range(len(layer_update_ratios)), layer_update_ratios)
+    axes[3][0].legend(legends)
 
     plt.tight_layout()
     plt.show()
