@@ -13,3 +13,6 @@ Final test loss = 2.3032, test accuracy = 31.49%
 ACCEPTED FOR NOW DESPITE REGRESSION, for educational purposes
 of having multiple hidden layers. Will revert again later.
 
+After fixing initialisation
+Step 200000: validation loss = 2.2953, validation accuracy = 31.39%
+Final test loss = 2.3021, test accuracy = 31.47%

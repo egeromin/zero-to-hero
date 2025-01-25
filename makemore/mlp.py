@@ -29,7 +29,7 @@ from matplotlib import pyplot as plt
 # 4. Fix the initialisation using manual scaling factors:  ✅
 #     a. First, the initial loss ✅
 #     b. Then, the saturated tanh ✅
-# 5. Use kaiming initialisation and compare
+# 5. Use kaiming initialisation and compare  ✅
 # 6. Implement the variants of batch norm by hand and then show results.
 
 
