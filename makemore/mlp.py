@@ -76,14 +76,16 @@ class Linear:
         output_size: int,
         generator: torch.Generator,
         bias: bool = True,
-        scale_factor: float = 1.0,
+        gain: float = 1.0,
     ):
+        kaiming_factor = input_size**-0.5
         self.weights: torch.Tensor = (
             torch.randn(
                 size=(input_size, output_size),
                 generator=generator,
             )
-            * scale_factor
+            * gain
+            * kaiming_factor
         )
         self.weights.requires_grad = True
         self.bias: torch.Tensor | None = None
@@ -140,14 +142,14 @@ class MLP:
                 embedding_size * context_size,
                 hidden_size,
                 generator=g,
-                scale_factor=0.1,
+                gain=5 / 3,
             ),
             Tanh(),
-            Linear(hidden_size, hidden_size, generator=g, scale_factor=0.1),
+            Linear(hidden_size, hidden_size, generator=g, gain=5 / 3),
             Tanh(),
-            Linear(hidden_size, hidden_size, generator=g, scale_factor=0.1),
+            Linear(hidden_size, hidden_size, generator=g, gain=5 / 3),
             Tanh(),
-            Linear(hidden_size, vocab_size, generator=g, scale_factor=0.1),
+            Linear(hidden_size, vocab_size, generator=g, gain=1.0),
         ]
 
     def forward(self, x: torch.Tensor, training: bool = True) -> torch.Tensor:
