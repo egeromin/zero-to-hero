@@ -132,23 +132,12 @@ class MLP:
         self.layers = [
             Linear(embedding_size * context_size, hidden_size, generator=g),
             Tanh(),
+            Linear(hidden_size, hidden_size, generator=g),
+            Tanh(),
+            Linear(hidden_size, hidden_size, generator=g),
+            Tanh(),
             Linear(hidden_size, vocab_size, generator=g),
         ]
-        # self.hidden_w: torch.Tensor = torch.randn(
-        #     size=(embedding_size * context_size, hidden_size),
-        #     requires_grad=True,
-        #     generator=g,
-        # )
-        # self.hidden_b: torch.Tensor = torch.zeros(
-        #     size=(hidden_size,), requires_grad=True, dtype=torch.float
-        # )
-        # self.output_w: torch.Tensor = torch.randn(
-        #     size=(hidden_size, vocab_size), requires_grad=True, generator=g
-        # )
-        # self.output_b: torch.Tensor = torch.zeros(
-        #     size=(vocab_size,), requires_grad=True, dtype=torch.float
-        # )
-        # self.hidden_nonlin = None  # activations after the first tanh
 
     def forward(self, x: torch.Tensor, training: bool = True) -> torch.Tensor:
         # Forward pass. Do not compute the final softmax,
@@ -220,8 +209,8 @@ def train_model(mlp: MLP, X: torch.Tensor, Y: torch.Tensor, g: torch.Generator) 
     # Prepare axes for the mega debug plots
     fig, axes = plt.subplots(nrows=4, ncols=2, figsize=(10, 16))
 
-    # num_training_iterations = 200_000
-    # While iterating, revert to a lower number of iterations.
+    # num_training_iterations = 200_001
+    # While experimenting, revert to a lower number of iterations.
     num_training_iterations = 4_001
     val_losses: list[tuple[int, float]] = []
     batch_losses: list[float] = []
@@ -382,7 +371,7 @@ def main():
         vocab_size=len(stoi),
         context_size=context_size,
         embedding_size=11,
-        hidden_size=200,
+        hidden_size=50,
         g=g,
     )
     output = mlp.forward(X[:20, :])

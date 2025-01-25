@@ -7,3 +7,9 @@ Step 200000: validation loss = 2.4116, validation accuracy = 29.29%
 Final test loss = 2.4192, test accuracy = 28.95%
 WORSE, REJECTED.
 
+After adding more hidden layers
+Step 200000: validation loss = 2.2996, validation accuracy = 31.19%
+Final test loss = 2.3032, test accuracy = 31.49%
+ACCEPTED FOR NOW DESPITE REGRESSION, for educational purposes
+of having multiple hidden layers. Will revert again later.
+
