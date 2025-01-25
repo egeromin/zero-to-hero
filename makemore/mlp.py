@@ -192,7 +192,7 @@ def calculate_loss(mlp: MLP, logits: torch.Tensor, Y: torch.Tensor) -> torch.Ten
     reg_alpha = 0.001
     model_loss = F.cross_entropy(logits, Y)
     params = iter(mlp.parameters())
-    # next(params)  # exclude embedding from regularization
+    next(params)  # exclude embedding from regularization
     reg_loss = reg_alpha * sum((param**2).sum() for param in params if param.dim() == 2)
     loss = model_loss + reg_loss
     return loss
@@ -222,7 +222,7 @@ def train_model(mlp: MLP, X: torch.Tensor, Y: torch.Tensor, g: torch.Generator) 
 
     # num_training_iterations = 200_000
     # While iterating, revert to a lower number of iterations.
-    num_training_iterations = 200_001
+    num_training_iterations = 4_001
     val_losses: list[tuple[int, float]] = []
     batch_losses: list[float] = []
     update_ratios: Mapping[int, list[float]] = defaultdict(list)
