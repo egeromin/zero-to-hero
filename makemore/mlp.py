@@ -172,7 +172,7 @@ class MLP:
 
     def update_parameters(self, learning_rate: float):
         for parameter in self.parameters():
-            parameter.data -= learning_rate * parameter.data
+            parameter.data -= learning_rate * parameter.grad
 
 
 @torch.no_grad()
@@ -191,9 +191,9 @@ def calculate_loss_and_accuracy(
 def calculate_loss(mlp: MLP, logits: torch.Tensor, Y: torch.Tensor) -> torch.Tensor:
     reg_alpha = 0.001
     model_loss = F.cross_entropy(logits, Y)
-    reg_loss = reg_alpha * sum(
-        (param**2).sum() for param in mlp.parameters() if param.dim() == 2
-    )
+    params = iter(mlp.parameters())
+    next(params)  # exclude embedding from regularization
+    reg_loss = reg_alpha * sum((param**2).sum() for param in params if param.dim() == 2)
     loss = model_loss + reg_loss
     return loss
 
@@ -302,7 +302,7 @@ def train_model(mlp: MLP, X: torch.Tensor, Y: torch.Tensor, g: torch.Generator) 
                     # The following does not work so well, since it's too much influenced by outliers:
                     # ratios = learning_rate * weights.grad.view(-1) / weights.view(-1)
                     # ratio = ratios.mean()
-                update_ratios[k].append(ratio.log10().item())
+                    update_ratios[k].append(ratio.log10().item())
 
         mlp.update_parameters(learning_rate)
 
