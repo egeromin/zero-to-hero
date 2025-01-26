@@ -77,8 +77,12 @@ class Linear:
         generator: torch.Generator,
         bias: bool = True,
         gain: float = 1.0,
+        use_kaiming: bool = True,
     ):
-        kaiming_factor = input_size**-0.5
+        if use_kaiming:
+            kaiming_factor = input_size**-0.5
+        else:
+            kaiming_factor = 1.0
         self.weights: torch.Tensor = (
             torch.randn(
                 size=(input_size, output_size),
@@ -139,8 +143,8 @@ class BatchNormID:
         self.input_size = input_size
         self.eps = 1e-8
         self.momentum = momentum
-        # self.scale = torch.ones((1, input_size), dtype=torch.float, requires_grad=True)
-        # self.shift = torch.ones((1, input_size), dtype=torch.float, requires_grad=True)
+        self.scale = torch.ones((1, input_size), dtype=torch.float, requires_grad=True)
+        self.shift = torch.zeros((1, input_size), dtype=torch.float, requires_grad=True)
         self.means_running = torch.zeros((1, input_size), dtype=torch.float)
         self.std_running = torch.ones((1, input_size), dtype=torch.float)
 
@@ -149,6 +153,7 @@ class BatchNormID:
             means = X.mean(dim=0, keepdim=True)
             std = X.std(dim=0, keepdim=True)
             self.out = (X - means) / (std + self.eps)
+            self.out = self.out * self.scale + self.shift
             self.out.retain_grad()
 
             with torch.no_grad():
@@ -160,6 +165,7 @@ class BatchNormID:
                 )
         else:
             self.out = (X - self.means_running) / (self.std_running + self.eps)
+            self.out = self.out * self.scale + self.shift
         return self.out
 
     def parameters(self) -> Iterable[torch.Tensor]:
@@ -180,12 +186,7 @@ class MLP:
             size=(vocab_size, embedding_size), requires_grad=True, generator=g
         )
         self.layers = [
-            Linear(
-                embedding_size * context_size,
-                hidden_size,
-                generator=g,
-                gain=5 / 3,
-            ),
+            Linear(embedding_size * context_size, hidden_size, generator=g, gain=5 / 3),
             BatchNormID(hidden_size),
             Tanh(),
             Linear(hidden_size, hidden_size, generator=g, gain=5 / 3),
@@ -289,7 +290,7 @@ def train_model(mlp: MLP, X: torch.Tensor, Y: torch.Tensor, g: torch.Generator) 
         loss.backward()
 
         # Heuristic learning rate
-        learning_rate = 0.1 if i < 100_000 else 0.01
+        learning_rate = 0.04 if i < 100_000 else 0.004
 
         # Calculate statistics for plotting
         with torch.no_grad():

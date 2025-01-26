@@ -40,4 +40,15 @@ Step 24000: validation loss = 2.3540, validation accuracy = 28.26%
 Step 28000: validation loss = 2.3586, validation accuracy = 29.10%
 Step 32000: validation loss = 2.3392, validation accuracy = 28.91%
 
+With shift and scale, and no kaiming, 32K
+Step 32000: validation loss = 2.3414, validation accuracy = 29.45%
+Final test loss = 2.3397, test accuracy = 29.94%
+
+Shift and scale, no kaiming, lower learning rate, 32K
+Step 32000: validation loss = 2.3359, validation accuracy = 30.03%
+Final test loss = 2.3367, test accuracy = 30.17%
+
+Bring kaiming back, even lower learning rate, 32K
+Step 32000: validation loss = 2.3077, validation accuracy = 30.35%
+Final test loss = 2.3093, test accuracy = 30.84%
 
