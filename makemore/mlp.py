@@ -92,7 +92,10 @@ class Linear:
             * kaiming_factor
         )
         self.weights.requires_grad = True
+        self.weights_grad = None  # Manual grad.
         self.bias: torch.Tensor | None = None
+        self.bias_grad = None  # Manual grad.
+        self.X = None  # For manual grad
         if bias:
             self.bias: torch.Tensor = torch.zeros(
                 size=(output_size,),
@@ -108,12 +111,25 @@ class Linear:
             # The following are not "leaf tensors" and therefore must be explicitly instructed
             # to retain "tensor.grad".
             self.out.retain_grad()
+            self.X = X
         return self.out
 
     def parameters(self) -> Iterable[torch.Tensor]:
         yield self.weights
         if self.bias is not None:
             yield self.bias
+
+    # Assuming that we just have a stack of linear layers
+    def manual_backprop(self, output_grad: torch.Tensor) -> torch.Tensor:
+        """Given the output grads with respect to the loss,
+        returns the input grads with respect to the loss."""
+        self.weights_grad = self.X.T @ output_grad
+        assert self.weights_grad.shape == self.weights.shape
+        if self.bias is not None:
+            self.bias_grad = output_grad.sum(dim=0, keepdim=True)
+            assert self.bias_grad.shape == self.bias.shape
+        X_grad = output_grad @ self.weights.T
+        return X_grad
 
 
 class Tanh:
@@ -127,6 +143,9 @@ class Tanh:
         # Simple way to define an empty iterator
         return
         yield
+
+    def manual_backprop(self, output_grad: torch.Tensor) -> torch.Tensor:
+        return output_grad * (1 - self.out**2)
 
 
 class BatchNormID:
