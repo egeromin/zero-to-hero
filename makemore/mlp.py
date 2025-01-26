@@ -135,9 +135,14 @@ class BatchNormID:
     the mini-batch.
     """
 
-    def __init__(self, input_size: int):
+    def __init__(self, input_size: int, momentum: float = 0.999):
         self.input_size = input_size
         self.eps = 1e-8
+        self.momentum = momentum
+        # self.scale = torch.ones((1, input_size), dtype=torch.float, requires_grad=True)
+        # self.shift = torch.ones((1, input_size), dtype=torch.float, requires_grad=True)
+        self.means_running = torch.zeros((1, input_size), dtype=torch.float)
+        self.std_running = torch.ones((1, input_size), dtype=torch.float)
 
     def __call__(self, X: torch.Tensor, training: bool = True) -> torch.Tensor:
         if training:
@@ -145,8 +150,16 @@ class BatchNormID:
             std = X.std(dim=0, keepdim=True)
             self.out = (X - means) / (std + self.eps)
             self.out.retain_grad()
+
+            with torch.no_grad():
+                self.means_running = (
+                    self.momentum * self.means_running + (1.0 - self.momentum) * means
+                )
+                self.std_running = (
+                    self.momentum * self.std_running + (1.0 - self.momentum) * std
+                )
         else:
-            self.out = X
+            self.out = (X - self.means_running) / (self.std_running + self.eps)
         return self.out
 
     def parameters(self) -> Iterable[torch.Tensor]:

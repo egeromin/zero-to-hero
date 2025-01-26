@@ -28,3 +28,16 @@ Step 20000: validation loss = 2.5936, validation accuracy = 22.89%
 Step 24000: validation loss = 2.6023, validation accuracy = 22.26%
 Step 28000: validation loss = 2.6125, validation accuracy = 21.95%
 
+Still without shift or scale, but after fixing inference normalisation,
+by using running mean and std:
+Step 0: validation loss = 3.9929, validation accuracy = 5.25%
+Step 4000: validation loss = 2.4873, validation accuracy = 26.80%
+Step 8000: validation loss = 2.3943, validation accuracy = 28.69%
+Step 12000: validation loss = 2.3783, validation accuracy = 28.62%
+Step 16000: validation loss = 2.3620, validation accuracy = 28.41%
+Step 20000: validation loss = 2.3600, validation accuracy = 28.52%
+Step 24000: validation loss = 2.3540, validation accuracy = 28.26%
+Step 28000: validation loss = 2.3586, validation accuracy = 29.10%
+Step 32000: validation loss = 2.3392, validation accuracy = 28.91%
+
+
