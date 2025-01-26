@@ -52,3 +52,7 @@ Bring kaiming back, even lower learning rate, 32K
 Step 32000: validation loss = 2.3077, validation accuracy = 30.35%
 Final test loss = 2.3093, test accuracy = 30.84%
 
+Final 200K performance, with batch norm
+Step 200000: validation loss = 2.2111, validation accuracy = 32.30%
+Final test loss = 2.2184, test accuracy = 32.31%
+
