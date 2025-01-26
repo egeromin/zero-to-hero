@@ -125,6 +125,35 @@ class Tanh:
         yield
 
 
+class BatchNormID:
+    """
+    We want the input of the tanh to be approximately Gaussian
+    So, we can normalise each input in the batch so that the batch
+    is approximately Gaussian.
+    Each *neuron* should be approximately Gaussian, so we normalise
+    each neuron separately, by calculating its std and mean across
+    the mini-batch.
+    """
+
+    def __init__(self, input_size: int):
+        self.input_size = input_size
+        self.eps = 1e-8
+
+    def __call__(self, X: torch.Tensor, training: bool = True) -> torch.Tensor:
+        if training:
+            means = X.mean(dim=0, keepdim=True)
+            std = X.std(dim=0, keepdim=True)
+            self.out = (X - means) / (std + self.eps)
+            self.out.retain_grad()
+        else:
+            self.out = X
+        return self.out
+
+    def parameters(self) -> Iterable[torch.Tensor]:
+        return
+        yield
+
+
 class MLP:
     def __init__(
         self,
@@ -144,10 +173,13 @@ class MLP:
                 generator=g,
                 gain=5 / 3,
             ),
+            BatchNormID(hidden_size),
             Tanh(),
             Linear(hidden_size, hidden_size, generator=g, gain=5 / 3),
+            BatchNormID(hidden_size),
             Tanh(),
             Linear(hidden_size, hidden_size, generator=g, gain=5 / 3),
+            BatchNormID(hidden_size),
             Tanh(),
             Linear(hidden_size, vocab_size, generator=g, gain=1.0),
         ]
@@ -349,6 +381,7 @@ def train_model(mlp: MLP, X: torch.Tensor, Y: torch.Tensor, g: torch.Generator) 
     return mlp
 
 
+@torch.no_grad()
 def sample_from_model(
     mlp: MLP,
     g: torch.Generator,
@@ -365,7 +398,7 @@ def sample_from_model(
             x = torch.tensor([stoi[c] for c in current_ctx], dtype=torch.long).view(
                 1, -1
             )
-            logits = mlp.forward(x)
+            logits = mlp.forward(x, training=False)
             probs = F.softmax(logits, dim=-1)
             sampled_idx = torch.multinomial(probs, num_samples=1, generator=g)
             pred = itos[sampled_idx.item()]
@@ -387,9 +420,6 @@ def main():
         hidden_size=50,
         g=g,
     )
-    output = mlp.forward(X[:20, :])
-    print(output.shape)
-
     mlp = train_model(mlp, X, Y, g)
     sample_from_model(mlp, g=g, num_samples=20, context_size=context_size, stoi=stoi)
 
