@@ -126,7 +126,7 @@ class Linear:
         self.weights_grad = self.X.T @ output_grad
         assert self.weights_grad.shape == self.weights.shape
         if self.bias is not None:
-            self.bias_grad = output_grad.sum(dim=0, keepdim=True)
+            self.bias_grad = output_grad.sum(dim=0)
             assert self.bias_grad.shape == self.bias.shape
         X_grad = output_grad @ self.weights.T
         return X_grad
@@ -469,7 +469,7 @@ def test_manual_backprop():
         Tanh(),
         Linear(17, output_size, generator=g),
     ]
-    x = torch.rand(batch_size, input_size, generator=g)
+    x = torch.rand(batch_size, input_size, generator=g, requires_grad=True)
     y = torch.tensor(list(range(output_size)) + list(range(batch_size - output_size)))
     output = x
     for layer in layers:
