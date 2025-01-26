@@ -479,9 +479,18 @@ def test_manual_backprop():
     loss = F.cross_entropy(logits, y)
     loss.backward()
 
-    # TODO: also calculate the backward pass on the logits by hand, without using logits.grad
-    output_grad = logits.grad
+    # Backward pass with respect to the logits,
+    # based on derivative of the cross entropy formula
+    logits_grad = F.softmax(logits, dim=-1)
+    for i, yi in enumerate(y):
+        logits_grad[i, yi] -= 1.0
+    logits_grad /= batch_size
 
+    assert logits_grad.shape == logits.grad.shape
+    assert torch.allclose(logits.grad, logits_grad)
+
+    # Backward pass through each of the layers.
+    output_grad = logits_grad
     for layer in reversed(layers):
         assert output_grad.shape == layer.out.shape == layer.out.grad.shape
         assert torch.allclose(output_grad, layer.out.grad)
@@ -499,6 +508,8 @@ def test_manual_backprop():
     # Final check
     assert output_grad.shape == x.grad.shape
     assert torch.allclose(output_grad, x.grad)
+
+    # TODO: implement the backward pass for the batchnorm operation as well.
 
 
 if __name__ == "__main__":
