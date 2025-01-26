@@ -97,10 +97,10 @@ class Linear:
         self.bias_grad = None  # Manual grad.
         self.X = None  # For manual grad
         if bias:
-            self.bias: torch.Tensor = torch.zeros(
+            self.bias: torch.Tensor = torch.randn(
                 size=(output_size,),
                 requires_grad=True,
-                dtype=torch.float,
+                generator=generator,
             )
 
     def __call__(self, X: torch.Tensor, training: bool = True) -> torch.Tensor:
@@ -457,5 +457,49 @@ def main():
     sample_from_model(mlp, g=g, num_samples=20, context_size=context_size, stoi=stoi)
 
 
+def test_manual_backprop():
+    g = torch.Generator().manual_seed(2147483647)
+    input_size = 11
+    output_size = 19
+    batch_size = 32
+    layers = [
+        Linear(input_size, 13, generator=g),
+        Tanh(),
+        Linear(13, 17, generator=g),
+        Tanh(),
+        Linear(17, output_size, generator=g),
+    ]
+    x = torch.rand(batch_size, input_size, generator=g)
+    y = torch.tensor(list(range(output_size)) + list(range(batch_size - output_size)))
+    output = x
+    for layer in layers:
+        output = layer(output)
+    logits = output
+    logits.retain_grad()
+    loss = F.cross_entropy(logits, y)
+    loss.backward()
+
+    # TODO: also calculate the backward pass on the logits by hand, without using logits.grad
+    output_grad = logits.grad
+
+    for layer in reversed(layers):
+        assert output_grad.shape == layer.out.shape == layer.out.grad.shape
+        assert torch.allclose(output_grad, layer.out.grad)
+        output_grad = layer.manual_backprop(output_grad)
+        if isinstance(layer, Linear):
+            assert layer.bias_grad.shape == layer.bias.shape == layer.bias.grad.shape
+            assert (
+                layer.weights_grad.shape
+                == layer.weights.shape
+                == layer.weights.grad.shape
+            )
+            assert torch.allclose(layer.bias_grad, layer.bias.grad)
+            assert torch.allclose(layer.weights_grad, layer.weights.grad)
+
+    # Final check
+    assert output_grad.shape == x.grad.shape
+    assert torch.allclose(output_grad, x.grad)
+
+
 if __name__ == "__main__":
-    main()
+    test_manual_backprop()
