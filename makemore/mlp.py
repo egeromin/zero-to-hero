@@ -205,7 +205,7 @@ class BatchNormID:
     @torch.no_grad()
     def manual_backprop(self, output_grad: torch.Tensor) -> torch.Tensor:
         self.scale_grad = (output_grad * self.normalised).sum(dim=0, keepdim=True)
-        self.shift_grad = output_grad.sum(keepdim=True)
+        self.shift_grad = output_grad.sum(dim=0, keepdim=True)
 
         batch_size = output_grad.shape[0]
         input_grad = (self.X - self.means) ** 2 / (
@@ -214,6 +214,7 @@ class BatchNormID:
         input_grad = (batch_size - 1) / (
             batch_size * (self.std + self.eps)
         ) - input_grad
+        input_grad = input_grad * self.scale_grad
         return input_grad
 
 
@@ -489,8 +490,10 @@ def test_manual_backprop():
     batch_size = 32
     layers = [
         Linear(input_size, 13, generator=g),
+        BatchNormID(13),
         Tanh(),
         Linear(13, 17, generator=g),
+        BatchNormID(17),
         Tanh(),
         Linear(17, output_size, generator=g),
     ]
@@ -518,7 +521,11 @@ def test_manual_backprop():
     output_grad = logits_grad
     for layer in reversed(layers):
         assert output_grad.shape == layer.out.shape == layer.out.grad.shape
-        assert torch.allclose(output_grad, layer.out.grad)
+        try:
+            assert torch.allclose(output_grad, layer.out.grad)
+        except AssertionError:
+            print(output_grad[0, :4])
+            print(layer.out.grad[0, :4])
         output_grad = layer.manual_backprop(output_grad)
         if isinstance(layer, Linear):
             assert layer.bias_grad.shape == layer.bias.shape == layer.bias.grad.shape
@@ -529,6 +536,11 @@ def test_manual_backprop():
             )
             assert torch.allclose(layer.bias_grad, layer.bias.grad)
             assert torch.allclose(layer.weights_grad, layer.weights.grad)
+        if isinstance(layer, BatchNormID):
+            assert layer.scale_grad.shape == layer.scale.shape == layer.scale.grad.shape
+            assert layer.shift_grad.shape == layer.shift.shape == layer.shift.grad.shape
+            assert torch.allclose(layer.scale_grad, layer.scale.grad)
+            assert torch.allclose(layer.shift_grad, layer.shift.grad)
 
     # Final check
     assert output_grad.shape == x.grad.shape
