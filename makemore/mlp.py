@@ -120,6 +120,7 @@ class Linear:
             yield self.bias
 
     # Assuming that we just have a stack of linear layers
+    @torch.no_grad()
     def manual_backprop(self, output_grad: torch.Tensor) -> torch.Tensor:
         """Given the output grads with respect to the loss,
         returns the input grads with respect to the loss."""
@@ -144,6 +145,7 @@ class Tanh:
         return
         yield
 
+    @torch.no_grad()
     def manual_backprop(self, output_grad: torch.Tensor) -> torch.Tensor:
         return output_grad * (1 - self.out**2)
 
@@ -163,33 +165,56 @@ class BatchNormID:
         self.eps = 1e-8
         self.momentum = momentum
         self.scale = torch.ones((1, input_size), dtype=torch.float, requires_grad=True)
+        self.scale_grad = None
         self.shift = torch.zeros((1, input_size), dtype=torch.float, requires_grad=True)
+        self.shift_grad = None
         self.means_running = torch.zeros((1, input_size), dtype=torch.float)
         self.std_running = torch.ones((1, input_size), dtype=torch.float)
+        self.out = None
+        self.X = None
+        self.means = None
+        self.std = None
+        self.normalised = None
 
     def __call__(self, X: torch.Tensor, training: bool = True) -> torch.Tensor:
         if training:
-            means = X.mean(dim=0, keepdim=True)
-            std = X.std(dim=0, keepdim=True)
-            self.out = (X - means) / (std + self.eps)
-            self.out = self.out * self.scale + self.shift
+            self.X = X
+            self.means = X.mean(dim=0, keepdim=True)
+            self.std = X.std(dim=0, keepdim=True)
+            self.normalised = (X - self.means) / (self.std + self.eps)
+            self.out = self.normalised * self.scale + self.shift
             self.out.retain_grad()
 
             with torch.no_grad():
                 self.means_running = (
-                    self.momentum * self.means_running + (1.0 - self.momentum) * means
+                    self.momentum * self.means_running
+                    + (1.0 - self.momentum) * self.means
                 )
                 self.std_running = (
-                    self.momentum * self.std_running + (1.0 - self.momentum) * std
+                    self.momentum * self.std_running + (1.0 - self.momentum) * self.std
                 )
         else:
-            self.out = (X - self.means_running) / (self.std_running + self.eps)
-            self.out = self.out * self.scale + self.shift
+            self.normalised = (X - self.means_running) / (self.std_running + self.eps)
+            self.out = self.normalised * self.scale + self.shift
         return self.out
 
     def parameters(self) -> Iterable[torch.Tensor]:
         return
         yield
+
+    @torch.no_grad()
+    def manual_backprop(self, output_grad: torch.Tensor) -> torch.Tensor:
+        self.scale_grad = (output_grad * self.normalised).sum(dim=0, keepdim=True)
+        self.shift_grad = output_grad.sum(keepdim=True)
+
+        batch_size = output_grad.shape[0]
+        input_grad = (self.X - self.means) ** 2 / (
+            batch_size * self.std * (self.std + self.eps)
+        )
+        input_grad = (batch_size - 1) / (
+            batch_size * (self.std + self.eps)
+        ) - input_grad
+        return input_grad
 
 
 class MLP:
