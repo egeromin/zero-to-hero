@@ -160,13 +160,20 @@ class BatchNormID:
     the mini-batch.
     """
 
-    def __init__(self, input_size: int, momentum: float = 0.999):
+    def __init__(
+        self, input_size: int, generator: torch.Generator, momentum: float = 0.999
+    ):
         self.input_size = input_size
         self.eps = 1e-8
         self.momentum = momentum
-        self.scale = torch.ones((1, input_size), dtype=torch.float, requires_grad=True)
+        self.scale = (
+            torch.ones((1, input_size), dtype=torch.float)
+            + torch.randn((1, input_size), generator=generator) * 0.01
+        )
+        self.scale.requires_grad = True
         self.scale_grad = None
-        self.shift = torch.zeros((1, input_size), dtype=torch.float, requires_grad=True)
+        self.shift = torch.randn((1, input_size), generator=generator) * 0.01
+        self.shift.requires_grad = True
         self.shift_grad = None
         self.means_running = torch.zeros((1, input_size), dtype=torch.float)
         self.std_running = torch.ones((1, input_size), dtype=torch.float)
@@ -249,13 +256,13 @@ class MLP:
         )
         self.layers = [
             Linear(embedding_size * context_size, hidden_size, generator=g, gain=5 / 3),
-            BatchNormID(hidden_size),
+            BatchNormID(hidden_size, generator=g),
             Tanh(),
             Linear(hidden_size, hidden_size, generator=g, gain=5 / 3),
-            BatchNormID(hidden_size),
+            BatchNormID(hidden_size, generator=g),
             Tanh(),
             Linear(hidden_size, hidden_size, generator=g, gain=5 / 3),
-            BatchNormID(hidden_size),
+            BatchNormID(hidden_size, generator=g),
             Tanh(),
             Linear(hidden_size, vocab_size, generator=g, gain=1.0),
         ]
@@ -507,10 +514,10 @@ def test_manual_backprop():
     batch_size = 32
     layers = [
         Linear(input_size, 13, generator=g),
-        BatchNormID(13),
+        BatchNormID(13, generator=g),
         Tanh(),
         Linear(13, 17, generator=g),
-        BatchNormID(17),
+        BatchNormID(17, generator=g),
         Tanh(),
         Linear(17, output_size, generator=g),
     ]
