@@ -139,11 +139,19 @@ class Linear:
         X_grad = output_grad @ self.weights.T
         return X_grad
 
+    def manual_zero_grad(self):
+        self.out_grad = None
+        self.weights_grad = None
+        self.bias_grad = None
+
 
 class Tanh:
+    def __init__(self):
+        self.out = None
+        self.out_grad = None
+
     def __call__(self, X: torch.Tensor, training: bool = True) -> torch.Tensor:
         self.out = X.tanh()
-        self.out_grad = None
         if training:
             self.out.retain_grad()
         return self.out
@@ -161,6 +169,9 @@ class Tanh:
     def manual_backprop(self, output_grad: torch.Tensor) -> torch.Tensor:
         self.out_grad = output_grad
         return output_grad * (1 - self.out**2)
+
+    def manual_zero_grad(self):
+        self.out_grad = None
 
 
 class BatchNormID:
@@ -260,6 +271,18 @@ class BatchNormID:
         )
         return self.X_grad
 
+    def manual_zero_grad(self):
+        self.out_grad = None
+        self.scale_grad = None
+        self.shift_grad = None
+        self.normalised_grad = None
+        self.u_grad = None
+        self.v_grad = None
+        self.std_grad = None
+        self.var_grad = None
+        self.means_grad = None
+        self.X_grad = None
+
 
 class MLP:
     def __init__(
@@ -273,6 +296,8 @@ class MLP:
         self.embedding: torch.Tensor = torch.randn(
             size=(vocab_size, embedding_size), requires_grad=True, generator=g
         )
+        self.x = None
+        self.embeddings = None
         self.embedding_grad = None
         self.layers = [
             Linear(embedding_size * context_size, hidden_size, generator=g, gain=5 / 3),
@@ -291,8 +316,9 @@ class MLP:
         # Forward pass. Do not compute the final softmax,
         # as this will be calculated inside the loss function,
         # for numerical stability.
-        embeddings = self.embedding[x]
-        embeddings_reshaped = embeddings.view(embeddings.shape[0], -1)
+        self.x = x
+        self.embeddings = self.embedding[x]
+        embeddings_reshaped = self.embeddings.view(self.embeddings.shape[0], -1)
         output = embeddings_reshaped
         for layer in self.layers:
             output = layer(output, training=training)
@@ -313,7 +339,15 @@ class MLP:
             output_grad = layer.manual_backprop(output_grad)
 
         # Backward pass through the embedding
-        # TODO
+        # Would be slightly more efficient to implement this in `self.manual_update_parameters()`,
+        # to avoid the `torch.zeros` when allocating `self.embedding_grad`, however,
+        # we leave it like this for readability.
+        embeddings_reshaped_grad = output_grad
+        embeddings_grad = embeddings_reshaped_grad.view(*self.embeddings.shape)
+        self.embedding_grad = torch.zeros(
+            size=self.embedding.shape, dtype=torch.float32
+        )
+        self.embedding_grad[self.x] = embeddings_grad
 
     def parameters(self) -> Iterable[torch.Tensor]:
         yield self.embedding
@@ -329,11 +363,16 @@ class MLP:
         for parameter in self.parameters():
             parameter.grad = None
 
+    def manual_zero_grad(self):
+        for layer in self.layers:
+            layer.manual_zero_grad()
+        self.embedding_grad = None
+
     def update_parameters(self, learning_rate: float):
         for parameter in self.parameters():
             parameter.data -= learning_rate * parameter.grad
 
-    def manual_update_parameters(self, learning_rate: float):
+    def manual_update_parameters(self, learning_rate: float, embeddings_grad):
         for p, p_grad in zip(self.parameters(), self.param_grad()):
             p.data -= learning_rate * p_grad
 
@@ -399,7 +438,9 @@ def train_model(mlp: MLP, X: torch.Tensor, Y: torch.Tensor, g: torch.Generator) 
         assert X_batch.shape == (batch_size, X_train.shape[1])
         assert Y_batch.shape == (batch_size,)
 
-        mlp.zero_grad()
+        # mlp.zero_grad()  # UNCOMMENT when using autograd
+        mlp.manual_zero_grad()
+
         logits_batch = mlp.forward(
             X_batch, training=False
         )  # set training=True when using autograd
