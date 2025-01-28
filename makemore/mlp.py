@@ -96,6 +96,7 @@ class Linear:
         self.bias: torch.Tensor | None = None
         self.bias_grad = None  # Manual grad.
         self.X = None  # For manual grad
+        self.out_grad = None
         if bias:
             self.bias: torch.Tensor = torch.randn(
                 size=(output_size,),
@@ -119,11 +120,17 @@ class Linear:
         if self.bias is not None:
             yield self.bias
 
+    def param_grad(self) -> Iterable[torch.Tensor]:
+        yield self.weights_grad
+        if self.bias is not None:
+            yield self.bias_grad
+
     # Assuming that we just have a stack of linear layers
     @torch.no_grad()
     def manual_backprop(self, output_grad: torch.Tensor) -> torch.Tensor:
         """Given the output grads with respect to the loss,
         returns the input grads with respect to the loss."""
+        self.out_grad = output_grad
         self.weights_grad = self.X.T @ output_grad
         assert self.weights_grad.shape == self.weights.shape
         if self.bias is not None:
@@ -136,6 +143,7 @@ class Linear:
 class Tanh:
     def __call__(self, X: torch.Tensor, training: bool = True) -> torch.Tensor:
         self.out = X.tanh()
+        self.out_grad = None
         if training:
             self.out.retain_grad()
         return self.out
@@ -145,8 +153,13 @@ class Tanh:
         return
         yield
 
+    def param_grad(self) -> Iterable[torch.Tensor]:
+        return
+        yield
+
     @torch.no_grad()
     def manual_backprop(self, output_grad: torch.Tensor) -> torch.Tensor:
+        self.out_grad = output_grad
         return output_grad * (1 - self.out**2)
 
 
@@ -178,6 +191,7 @@ class BatchNormID:
         self.means_running = torch.zeros((1, input_size), dtype=torch.float)
         self.std_running = torch.ones((1, input_size), dtype=torch.float)
         self.out = None
+        self.out_grad = None
         self.X = None
         self.X_grad = None
         self.means = None
@@ -222,8 +236,13 @@ class BatchNormID:
         yield self.scale
         yield self.shift
 
+    def param_grad(self) -> Iterable[torch.Tensor]:
+        yield self.scale_grad
+        yield self.shift_grad
+
     @torch.no_grad()
     def manual_backprop(self, output_grad: torch.Tensor) -> torch.Tensor:
+        self.out_grad = output_grad
         self.scale_grad = (output_grad * self.normalised).sum(dim=0, keepdim=True)
         self.shift_grad = output_grad.sum(dim=0, keepdim=True)
 
@@ -254,6 +273,7 @@ class MLP:
         self.embedding: torch.Tensor = torch.randn(
             size=(vocab_size, embedding_size), requires_grad=True, generator=g
         )
+        self.embedding_grad = None
         self.layers = [
             Linear(embedding_size * context_size, hidden_size, generator=g, gain=5 / 3),
             BatchNormID(hidden_size, generator=g),
@@ -278,10 +298,32 @@ class MLP:
             output = layer(output, training=training)
         return output
 
+    def manual_backward(self, logits: torch.Tensor, Y: torch.Tensor) -> torch.Tensor:
+        # Backward pass with respect to the logits,
+        batch_size = Y.shape[0]
+
+        logits_grad = F.softmax(logits, dim=-1)
+        for i, yi in enumerate(Y):
+            logits_grad[i, yi] -= 1.0
+        logits_grad /= batch_size
+
+        # Backward pass through all remaining layers
+        output_grad = logits_grad
+        for layer in reversed(self.layers):
+            output_grad = layer.manual_backprop(output_grad)
+
+        # Backward pass through the embedding
+        # TODO
+
     def parameters(self) -> Iterable[torch.Tensor]:
         yield self.embedding
         for layer in self.layers:
             yield from layer.parameters()
+
+    def param_grad(self) -> Iterable[torch.Tensor]:
+        yield self.embedding_grad
+        for layer in self.layers:
+            yield from layer.param_grad()
 
     def zero_grad(self):
         for parameter in self.parameters():
@@ -290,6 +332,10 @@ class MLP:
     def update_parameters(self, learning_rate: float):
         for parameter in self.parameters():
             parameter.data -= learning_rate * parameter.grad
+
+    def manual_update_parameters(self, learning_rate: float):
+        for p, p_grad in zip(self.parameters(), self.param_grad()):
+            p.data -= learning_rate * p_grad
 
 
 @torch.no_grad()
@@ -315,6 +361,7 @@ def calculate_loss(mlp: MLP, logits: torch.Tensor, Y: torch.Tensor) -> torch.Ten
     return loss
 
 
+@torch.no_grad()  # UNCOMMENT when using autograd, instead of manual grad
 def train_model(mlp: MLP, X: torch.Tensor, Y: torch.Tensor, g: torch.Generator) -> MLP:
     assert X.shape[0] == Y.shape[0]
     # split into train, test and validation sets
@@ -353,10 +400,16 @@ def train_model(mlp: MLP, X: torch.Tensor, Y: torch.Tensor, g: torch.Generator) 
         assert Y_batch.shape == (batch_size,)
 
         mlp.zero_grad()
-        logits_batch = mlp.forward(X_batch)
+        logits_batch = mlp.forward(
+            X_batch, training=False
+        )  # set training=True when using autograd
         loss = calculate_loss(mlp, logits_batch, Y_batch)
         batch_losses.append(loss.log10().item())
-        loss.backward()
+
+        # Backward pass. Instead of using autograd,
+        # manually compute the backward pass.
+        # loss.backward()  # <- UNCOMMENT to use autograd backprop instead.
+        _X_batch_grad = mlp.manual_backward(logits_batch, Y_batch)
 
         # Heuristic learning rate
         learning_rate = 0.04 if i < 100_000 else 0.004
@@ -385,7 +438,7 @@ def train_model(mlp: MLP, X: torch.Tensor, Y: torch.Tensor, g: torch.Generator) 
                         hy, hx = torch.histogram(activations, density=True)
                         axes[plot_num][0].plot(hx[:-1].detach(), hy.detach())
 
-                        gradients = layer.out.grad.view(-1)
+                        gradients = layer.out_grad.view(-1)
                         hy, hx = torch.histogram(gradients, density=True)
                         axes[plot_num][1].plot(hx[:-1].detach(), hy.detach())
 
@@ -413,7 +466,10 @@ def train_model(mlp: MLP, X: torch.Tensor, Y: torch.Tensor, g: torch.Generator) 
             for k, layer in enumerate(mlp.layers):
                 if isinstance(layer, Linear):
                     weights = next(p for p in layer.parameters() if p.dim() == 2)
-                    ratio = learning_rate * weights.grad.std() / weights.std()
+                    weights_grad = next(
+                        p_grad for p_grad in layer.param_grad() if p_grad.dim() == 2
+                    )
+                    ratio = learning_rate * weights_grad.std() / weights.std()
                     # variant, also works:
                     # ratio = learning_rate * weights.grad.abs().mean() / weights.abs().mean()
                     # The following does not work so well, since it's too much influenced by outliers:
