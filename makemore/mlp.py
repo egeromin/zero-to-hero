@@ -575,4 +575,4 @@ def test_manual_backprop():
 
 
 if __name__ == "__main__":
-    test_manual_backprop()
+    main()
