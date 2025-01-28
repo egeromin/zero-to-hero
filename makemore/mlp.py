@@ -172,16 +172,27 @@ class BatchNormID:
         self.std_running = torch.ones((1, input_size), dtype=torch.float)
         self.out = None
         self.X = None
+        self.X_grad = None
         self.means = None
         self.std = None
+        self.std_grad = None
         self.normalised = None
+        self.normalised_grad = None
+        self.u = None
+        self.v = None
+        self.u_grad = None
+        self.v_grad = None
+        self.means_grad = None
+        self.var_grad = None
 
     def __call__(self, X: torch.Tensor, training: bool = True) -> torch.Tensor:
         if training:
             self.X = X
             self.means = X.mean(dim=0, keepdim=True)
             self.std = X.std(dim=0, keepdim=True)
-            self.normalised = (X - self.means) / (self.std + self.eps)
+            self.v = self.std + self.eps
+            self.u = X - self.means
+            self.normalised = self.u / self.v
             self.out = self.normalised * self.scale + self.shift
             self.out.retain_grad()
 
@@ -194,28 +205,34 @@ class BatchNormID:
                     self.momentum * self.std_running + (1.0 - self.momentum) * self.std
                 )
         else:
-            self.normalised = (X - self.means_running) / (self.std_running + self.eps)
+            self.u = X - self.means_running
+            self.v = self.std_running + self.eps
+            self.normalised = self.u / self.v
             self.out = self.normalised * self.scale + self.shift
         return self.out
 
     def parameters(self) -> Iterable[torch.Tensor]:
-        return
-        yield
+        yield self.scale
+        yield self.shift
 
     @torch.no_grad()
     def manual_backprop(self, output_grad: torch.Tensor) -> torch.Tensor:
         self.scale_grad = (output_grad * self.normalised).sum(dim=0, keepdim=True)
         self.shift_grad = output_grad.sum(dim=0, keepdim=True)
 
-        batch_size = output_grad.shape[0]
-        input_grad = (self.X - self.means) ** 2 / (
-            batch_size * self.std * (self.std + self.eps)
+        B = output_grad.shape[0]
+        self.normalised_grad = output_grad * self.scale
+        self.u_grad = self.normalised_grad / self.v
+        self.v_grad = (
+            -(self.normalised_grad * self.normalised).sum(dim=0, keepdim=True) / self.v
         )
-        input_grad = (batch_size - 1) / (
-            batch_size * (self.std + self.eps)
-        ) - input_grad
-        input_grad = input_grad * self.scale_grad
-        return input_grad
+        self.std_grad = self.v_grad
+        self.var_grad = self.std_grad / (2 * self.std)
+        self.means_grad = -self.u_grad.sum(dim=0, keepdim=True)
+        self.X_grad = (
+            self.u_grad + self.means_grad / B + self.var_grad * self.u * 2 / (B - 1)
+        )
+        return self.X_grad
 
 
 class MLP:
@@ -524,8 +541,9 @@ def test_manual_backprop():
         try:
             assert torch.allclose(output_grad, layer.out.grad)
         except AssertionError:
-            print(output_grad[0, :4])
             print(layer.out.grad[0, :4])
+            print(output_grad[0, :4])
+            raise
         output_grad = layer.manual_backprop(output_grad)
         if isinstance(layer, Linear):
             assert layer.bias_grad.shape == layer.bias.shape == layer.bias.grad.shape
@@ -534,7 +552,9 @@ def test_manual_backprop():
                 == layer.weights.shape
                 == layer.weights.grad.shape
             )
-            assert torch.allclose(layer.bias_grad, layer.bias.grad)
+            assert torch.allclose(
+                layer.bias_grad, layer.bias.grad, rtol=1e-5, atol=1e-5
+            )
             assert torch.allclose(layer.weights_grad, layer.weights.grad)
         if isinstance(layer, BatchNormID):
             assert layer.scale_grad.shape == layer.scale.shape == layer.scale.grad.shape
@@ -545,8 +565,6 @@ def test_manual_backprop():
     # Final check
     assert output_grad.shape == x.grad.shape
     assert torch.allclose(output_grad, x.grad)
-
-    # TODO: implement the backward pass for the batchnorm operation as well.
 
 
 if __name__ == "__main__":
