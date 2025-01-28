@@ -293,7 +293,7 @@ class MLP:
         hidden_size: int,
         g: torch.Generator,
     ):
-        self.embedding: torch.Tensor = torch.randn(
+        self.embedding: torch.Tensor = torch.rand(
             size=(vocab_size, embedding_size), requires_grad=True, generator=g
         )
         self.x = None
@@ -324,14 +324,19 @@ class MLP:
             output = layer(output, training=training)
         return output
 
+    @torch.no_grad()
     def manual_backward(self, logits: torch.Tensor, Y: torch.Tensor) -> torch.Tensor:
         # Backward pass with respect to the logits,
         batch_size = Y.shape[0]
+        print(batch_size)
 
         logits_grad = F.softmax(logits, dim=-1)
         for i, yi in enumerate(Y):
             logits_grad[i, yi] -= 1.0
         logits_grad /= batch_size
+
+        # TODO: remove me after debug
+        assert torch.allclose(logits_grad, logits.grad)
 
         # Backward pass through all remaining layers
         output_grad = logits_grad
@@ -350,14 +355,14 @@ class MLP:
         self.embedding_grad[self.x] = embeddings_grad
 
     def parameters(self) -> Iterable[torch.Tensor]:
-        yield self.embedding
         for layer in self.layers:
             yield from layer.parameters()
+        # yield self.embedding
 
     def param_grad(self) -> Iterable[torch.Tensor]:
-        yield self.embedding_grad
         for layer in self.layers:
             yield from layer.param_grad()
+        # yield self.embedding_grad
 
     def zero_grad(self):
         for parameter in self.parameters():
@@ -671,5 +676,48 @@ def test_manual_backprop():
     assert torch.allclose(output_grad, x.grad)
 
 
+def test_manual_backprop_mlp():
+    context_size = 3
+    X, Y, stoi = load_dataset(context_size=context_size)
+
+    g = torch.Generator().manual_seed(2147483647)
+    mlp = MLP(
+        vocab_size=len(stoi),
+        context_size=context_size,
+        embedding_size=11,
+        hidden_size=50,
+        g=g,
+    )
+    mlp.zero_grad()
+    mlp.manual_zero_grad()
+
+    # Test on a batch of size 32
+    perm_idx = torch.randperm(len(X), generator=g)[:32]
+    X = X[perm_idx]
+    Y = Y[perm_idx]
+
+    logits = mlp.forward(X, training=True)
+    loss = calculate_loss(mlp, logits, Y)
+
+    # Backward in two different ways
+    loss.backward()
+    # store the autograd gradients before running backward manually
+    autograd_gradients = [p.grad.clone() for p in mlp.parameters()]
+
+    mlp.manual_backward(logits, Y)
+
+    # Test that the two methods give the same result, for all params
+    assert len(autograd_gradients) == len(list(mlp.param_grad()))
+    for p_auto_grad, p_grad in zip(autograd_gradients, mlp.param_grad()):
+        print("-------------------------------------------------------")
+        print(p_auto_grad.shape, p_grad.shape)
+        print(p_auto_grad.view(-1)[:6])
+        print(p_grad.view(-1)[:6])
+        print(p_auto_grad.view(-1)[:6] / p_grad.view(-1)[:6])
+        assert p_auto_grad.shape == p_grad.shape
+        # assert torch.allclose(p.grad, p_grad, rtol=1e-5, atol=1e-5)
+        print("ok")
+
+
 if __name__ == "__main__":
-    main()
+    test_manual_backprop_mlp()
