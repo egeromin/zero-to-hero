@@ -296,9 +296,10 @@ class MLP:
         self.embedding: torch.Tensor = torch.rand(
             size=(vocab_size, embedding_size), requires_grad=True, generator=g
         )
-        self.x = None
-        self.embeddings = None
         self.embedding_grad = None
+        self.x = None
+        self.selected_embeddings = None
+        self.selected_embeddings_grad = None
         self.layers = [
             Linear(embedding_size * context_size, hidden_size, generator=g, gain=5 / 3),
             BatchNormID(hidden_size, generator=g),
@@ -317,15 +318,17 @@ class MLP:
         # as this will be calculated inside the loss function,
         # for numerical stability.
         self.x = x
-        self.embeddings = self.embedding[x]
-        embeddings_reshaped = self.embeddings.view(self.embeddings.shape[0], -1)
-        output = embeddings_reshaped
+        self.selected_embeddings = self.embedding[x]
+        if training:
+            self.selected_embeddings.retain_grad()
+        selected_embeddings_reshaped = self.selected_embeddings.view(self.selected_embeddings.shape[0], -1)
+        output = selected_embeddings_reshaped
         for layer in self.layers:
             output = layer(output, training=training)
         return output
 
     @torch.no_grad()
-    def manual_backward(self, logits: torch.Tensor, Y: torch.Tensor) -> torch.Tensor:
+    def manual_backprop(self, logits: torch.Tensor, Y: torch.Tensor):
         # Backward pass with respect to the logits,
         batch_size = Y.shape[0]
         print(batch_size)
@@ -347,24 +350,27 @@ class MLP:
         # Would be slightly more efficient to implement this in `self.manual_update_parameters()`,
         # to avoid the `torch.zeros` when allocating `self.embedding_grad`, however,
         # we leave it like this for readability.
-        embeddings_reshaped_grad = output_grad
-        embeddings_grad = embeddings_reshaped_grad.view(*self.embeddings.shape)
+        selected_embeddings_reshaped_grad = output_grad
+        self.selected_embeddings_grad = selected_embeddings_reshaped_grad.view(*self.selected_embeddings.shape)
         self.embedding_grad = torch.zeros(size=self.embedding.shape, dtype=torch.float)
-        self.embedding_grad[self.x] = embeddings_grad
+        self.embedding_grad[self.x] = self.selected_embeddings_grad
 
     def parameters(self) -> Iterable[torch.Tensor]:
+        yield self.selected_embeddings
+        yield self.embedding
         for layer in self.layers:
             yield from layer.parameters()
-        # yield self.embedding
 
     def param_grad(self) -> Iterable[torch.Tensor]:
+        yield self.selected_embeddings_grad
+        yield self.embedding_grad
         for layer in self.layers:
             yield from layer.param_grad()
-        # yield self.embedding_grad
 
     def zero_grad(self):
         for parameter in self.parameters():
-            parameter.grad = None
+            if parameter is not None:  # TODO remove this if condition after debug.
+                parameter.grad = None
 
     def manual_zero_grad(self):
         for layer in self.layers:
@@ -452,7 +458,7 @@ def train_model(mlp: MLP, X: torch.Tensor, Y: torch.Tensor, g: torch.Generator) 
         # Backward pass. Instead of using autograd,
         # manually compute the backward pass.
         # loss.backward()  # <- UNCOMMENT to use autograd backprop instead.
-        mlp.manual_backward(logits_batch, Y_batch)
+        mlp.manual_backprop(logits_batch, Y_batch)
 
         # Heuristic learning rate
         learning_rate = 0.04 if i < 100_000 else 0.004
@@ -701,7 +707,7 @@ def test_manual_backprop_mlp():
     # store the autograd gradients before running backward manually
     autograd_gradients = [p.grad.clone() for p in mlp.parameters()]
 
-    mlp.manual_backward(logits, Y)
+    mlp.manual_backprop(logits, Y)
 
     # Test that the two methods give the same result, for all params
     assert len(autograd_gradients) == len(list(mlp.param_grad()))
