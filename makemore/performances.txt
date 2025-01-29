@@ -56,3 +56,16 @@ Final 200K performance, with batch norm
 Step 200000: validation loss = 2.2111, validation accuracy = 32.30%
 Final test loss = 2.2184, test accuracy = 32.31%
 
+32K performance, after fixing backprop for batchnorm scale and shift
+Step 0: validation loss = 4.8637, validation accuracy = 0.36%
+Step 4000: validation loss = 2.7451, validation accuracy = 26.17%
+Step 8000: validation loss = 2.5843, validation accuracy = 27.68%
+Step 12000: validation loss = 2.5068, validation accuracy = 27.95%
+Step 16000: validation loss = 2.4649, validation accuracy = 28.11%
+Step 20000: validation loss = 2.4330, validation accuracy = 28.11%
+Step 24000: validation loss = 2.4270, validation accuracy = 28.53%
+Step 28000: validation loss = 2.4070, validation accuracy = 28.41%
+Step 32000: validation loss = 2.4067, validation accuracy = 28.26%
+Final test loss = 2.3887, test accuracy = 28.85%
+
+
