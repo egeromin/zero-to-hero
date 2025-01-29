@@ -331,7 +331,6 @@ class MLP:
     def manual_backprop(self, logits: torch.Tensor, Y: torch.Tensor):
         # Backward pass with respect to the logits,
         batch_size = Y.shape[0]
-        print(batch_size)
 
         logits_grad = F.softmax(logits, dim=-1)
         for i, yi in enumerate(Y):
@@ -381,7 +380,7 @@ class MLP:
         for parameter in self.parameters():
             parameter.data -= learning_rate * parameter.grad
 
-    def manual_update_parameters(self, learning_rate: float, embeddings_grad):
+    def manual_update_parameters(self, learning_rate: float):
         for p, p_grad in zip(self.parameters(), self.param_grad()):
             p.data -= learning_rate * p_grad
 
@@ -440,7 +439,7 @@ def train_model(
 
     # num_training_iterations = 200_001
     # While experimenting, revert to a lower number of iterations.
-    num_training_iterations = 4_001
+    num_training_iterations = 32_001
     val_losses: list[tuple[int, float]] = []
     batch_losses: list[float] = []
     update_ratios: Mapping[int, list[float]] = defaultdict(list)
@@ -544,7 +543,10 @@ def train_model(
                     # ratio = ratios.mean()
                     update_ratios[k].append(ratio.log10().item())
 
-        mlp.update_parameters(learning_rate)
+        if use_manual_grad:
+            mlp.manual_update_parameters(learning_rate)
+        else:
+            mlp.update_parameters(learning_rate)
 
         # Calculate the validation accuracy
         if i % 4000 == 0:
@@ -626,7 +628,7 @@ def main():
         hidden_size=50,
         g=g,
     )
-    mlp = train_model(mlp, X, Y, g, use_manual_grad=False)
+    mlp = train_model(mlp, X, Y, g, use_manual_grad=True)
     sample_from_model(mlp, g=g, num_samples=20, context_size=context_size, stoi=stoi)
 
 
