@@ -321,7 +321,9 @@ class MLP:
         self.selected_embeddings = self.embedding[x]
         if training:
             self.selected_embeddings.retain_grad()
-        selected_embeddings_reshaped = self.selected_embeddings.view(self.selected_embeddings.shape[0], -1)
+        selected_embeddings_reshaped = self.selected_embeddings.view(
+            self.selected_embeddings.shape[0], -1
+        )
         output = selected_embeddings_reshaped
         for layer in self.layers:
             output = layer(output, training=training)
@@ -347,13 +349,16 @@ class MLP:
             output_grad = layer.manual_backprop(output_grad)
 
         # Backward pass through the embedding
-        # Would be slightly more efficient to implement this in `self.manual_update_parameters()`,
-        # to avoid the `torch.zeros` when allocating `self.embedding_grad`, however,
-        # we leave it like this for readability.
         selected_embeddings_reshaped_grad = output_grad
-        self.selected_embeddings_grad = selected_embeddings_reshaped_grad.view(*self.selected_embeddings.shape)
+        self.selected_embeddings_grad = selected_embeddings_reshaped_grad.view(
+            *self.selected_embeddings.shape
+        )
+
+        # Accumulate the gradients for each character
         self.embedding_grad = torch.zeros(size=self.embedding.shape, dtype=torch.float)
-        self.embedding_grad[self.x] = self.selected_embeddings_grad
+        for i, idx_chars in enumerate(self.x):  # 0 <= i < batch_size
+            for j, idx_char in enumerate(idx_chars):  # 0 <= j < context_size
+                self.embedding_grad[idx_char] += self.selected_embeddings_grad[i, j]
 
     def parameters(self) -> Iterable[torch.Tensor]:
         yield self.selected_embeddings
