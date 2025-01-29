@@ -349,9 +349,7 @@ class MLP:
         # we leave it like this for readability.
         embeddings_reshaped_grad = output_grad
         embeddings_grad = embeddings_reshaped_grad.view(*self.embeddings.shape)
-        self.embedding_grad = torch.zeros(
-            size=self.embedding.shape, dtype=torch.float32
-        )
+        self.embedding_grad = torch.zeros(size=self.embedding.shape, dtype=torch.float)
         self.embedding_grad[self.x] = embeddings_grad
 
     def parameters(self) -> Iterable[torch.Tensor]:
@@ -396,12 +394,13 @@ def calculate_loss_and_accuracy(
 
 
 def calculate_loss(mlp: MLP, logits: torch.Tensor, Y: torch.Tensor) -> torch.Tensor:
-    reg_alpha = 0.001
+    # reg_alpha = 0.001
     model_loss = F.cross_entropy(logits, Y)
-    params = iter(mlp.parameters())
-    next(params)  # exclude embedding from regularization
-    reg_loss = reg_alpha * sum((param**2).sum() for param in params if param.dim() == 2)
-    loss = model_loss + reg_loss
+    # params = iter(mlp.parameters())
+    # next(params)  # exclude embedding from regularization
+    # reg_loss = reg_alpha * sum((param**2).sum() for param in params if param.dim() == 2)
+    # loss = model_loss + reg_loss
+    loss = model_loss
     return loss
 
 
@@ -446,16 +445,14 @@ def train_model(mlp: MLP, X: torch.Tensor, Y: torch.Tensor, g: torch.Generator) 
         # mlp.zero_grad()  # UNCOMMENT when using autograd
         mlp.manual_zero_grad()
 
-        logits_batch = mlp.forward(
-            X_batch, training=False
-        )  # set training=True when using autograd
+        logits_batch = mlp.forward(X_batch)
         loss = calculate_loss(mlp, logits_batch, Y_batch)
         batch_losses.append(loss.log10().item())
 
         # Backward pass. Instead of using autograd,
         # manually compute the backward pass.
         # loss.backward()  # <- UNCOMMENT to use autograd backprop instead.
-        _X_batch_grad = mlp.manual_backward(logits_batch, Y_batch)
+        mlp.manual_backward(logits_batch, Y_batch)
 
         # Heuristic learning rate
         learning_rate = 0.04 if i < 100_000 else 0.004
@@ -715,7 +712,7 @@ def test_manual_backprop_mlp():
         print(p_grad.view(-1)[:6])
         print(p_auto_grad.view(-1)[:6] / p_grad.view(-1)[:6])
         assert p_auto_grad.shape == p_grad.shape
-        # assert torch.allclose(p.grad, p_grad, rtol=1e-5, atol=1e-5)
+        assert torch.allclose(p_auto_grad, p_grad, rtol=1e-5, atol=1e-5)
         print("ok")
 
 
