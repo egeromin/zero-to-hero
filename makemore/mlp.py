@@ -410,8 +410,13 @@ def calculate_loss(mlp: MLP, logits: torch.Tensor, Y: torch.Tensor) -> torch.Ten
     return loss
 
 
-@torch.no_grad()  # UNCOMMENT when using autograd, instead of manual grad
-def train_model(mlp: MLP, X: torch.Tensor, Y: torch.Tensor, g: torch.Generator) -> MLP:
+def train_model(
+    mlp: MLP,
+    X: torch.Tensor,
+    Y: torch.Tensor,
+    g: torch.Generator,
+    use_manual_grad: bool = False,
+) -> MLP:
     assert X.shape[0] == Y.shape[0]
     # split into train, test and validation sets
     # First shuffle the dataset
@@ -448,17 +453,22 @@ def train_model(mlp: MLP, X: torch.Tensor, Y: torch.Tensor, g: torch.Generator) 
         assert X_batch.shape == (batch_size, X_train.shape[1])
         assert Y_batch.shape == (batch_size,)
 
-        # mlp.zero_grad()  # UNCOMMENT when using autograd
-        mlp.manual_zero_grad()
+        mlp.zero_grad()
+
+        if use_manual_grad:
+            mlp.manual_zero_grad()
 
         logits_batch = mlp.forward(X_batch)
         loss = calculate_loss(mlp, logits_batch, Y_batch)
         batch_losses.append(loss.log10().item())
 
-        # Backward pass. Instead of using autograd,
-        # manually compute the backward pass.
-        # loss.backward()  # <- UNCOMMENT to use autograd backprop instead.
-        mlp.manual_backprop(logits_batch, Y_batch)
+        # Backward pass. Use either autograd,
+        # or manually implemented backward pass,
+        # depending on input arguments.
+        if use_manual_grad:
+            mlp.manual_backprop(logits_batch, Y_batch)
+        else:
+            loss.backward()
 
         # Heuristic learning rate
         learning_rate = 0.04 if i < 100_000 else 0.004
@@ -487,7 +497,10 @@ def train_model(mlp: MLP, X: torch.Tensor, Y: torch.Tensor, g: torch.Generator) 
                         hy, hx = torch.histogram(activations, density=True)
                         axes[plot_num][0].plot(hx[:-1].detach(), hy.detach())
 
-                        gradients = layer.out_grad.view(-1)
+                        if use_manual_grad:
+                            gradients = layer.out_grad.view(-1)
+                        else:
+                            gradients = layer.out.grad.view(-1)
                         hy, hx = torch.histogram(gradients, density=True)
                         axes[plot_num][1].plot(hx[:-1].detach(), hy.detach())
 
@@ -515,9 +528,14 @@ def train_model(mlp: MLP, X: torch.Tensor, Y: torch.Tensor, g: torch.Generator) 
             for k, layer in enumerate(mlp.layers):
                 if isinstance(layer, Linear):
                     weights = next(p for p in layer.parameters() if p.dim() == 2)
-                    weights_grad = next(
-                        p_grad for p_grad in layer.param_grad() if p_grad.dim() == 2
-                    )
+                    if use_manual_grad:
+                        weights_grad = next(
+                            p_grad for p_grad in layer.param_grad() if p_grad.dim() == 2
+                        )
+                    else:
+                        weights_grad = next(
+                            p.grad for p in layer.parameters() if p.dim() == 2
+                        )
                     ratio = learning_rate * weights_grad.std() / weights.std()
                     # variant, also works:
                     # ratio = learning_rate * weights.grad.abs().mean() / weights.abs().mean()
@@ -608,7 +626,7 @@ def main():
         hidden_size=50,
         g=g,
     )
-    mlp = train_model(mlp, X, Y, g)
+    mlp = train_model(mlp, X, Y, g, use_manual_grad=False)
     sample_from_model(mlp, g=g, num_samples=20, context_size=context_size, stoi=stoi)
 
 
@@ -723,4 +741,4 @@ def test_manual_backprop_mlp():
 
 
 if __name__ == "__main__":
-    test_manual_backprop_mlp()
+    main()
