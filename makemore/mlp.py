@@ -319,8 +319,6 @@ class MLP:
         # for numerical stability.
         self.x = x
         self.selected_embeddings = self.embedding[x]
-        if training:
-            self.selected_embeddings.retain_grad()
         selected_embeddings_reshaped = self.selected_embeddings.view(
             self.selected_embeddings.shape[0], -1
         )
@@ -340,8 +338,8 @@ class MLP:
             logits_grad[i, yi] -= 1.0
         logits_grad /= batch_size
 
-        # TODO: remove me after debug
-        assert torch.allclose(logits_grad, logits.grad)
+        # Uncomment the following for debug
+        # assert torch.allclose(logits_grad, logits.grad)
 
         # Backward pass through all remaining layers
         output_grad = logits_grad
@@ -361,21 +359,18 @@ class MLP:
                 self.embedding_grad[idx_char] += self.selected_embeddings_grad[i, j]
 
     def parameters(self) -> Iterable[torch.Tensor]:
-        yield self.selected_embeddings
         yield self.embedding
         for layer in self.layers:
             yield from layer.parameters()
 
     def param_grad(self) -> Iterable[torch.Tensor]:
-        yield self.selected_embeddings_grad
         yield self.embedding_grad
         for layer in self.layers:
             yield from layer.param_grad()
 
     def zero_grad(self):
         for parameter in self.parameters():
-            if parameter is not None:  # TODO remove this if condition after debug.
-                parameter.grad = None
+            parameter.grad = None
 
     def manual_zero_grad(self):
         for layer in self.layers:
