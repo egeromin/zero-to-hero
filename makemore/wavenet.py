@@ -437,12 +437,11 @@ def sample_from_model(
 
 
 def main():
-    context_size = 3
+    context_size = 8
     X, Y, stoi = load_dataset(context_size=context_size)
 
     g = torch.Generator().manual_seed(2147483647)
     vocab_size = len(stoi)
-    context_size = context_size
     embedding_size = 11
     hidden_size = 50
     model = Sequential(
@@ -450,12 +449,6 @@ def main():
             Embedding(vocab_size, embedding_size, generator=g),
             FlattenConsecutive(stride=context_size),
             Linear(embedding_size * context_size, hidden_size, generator=g, gain=5 / 3),
-            BatchNormID(hidden_size, generator=g),
-            Tanh(),
-            Linear(hidden_size, hidden_size, generator=g, gain=5 / 3),
-            BatchNormID(hidden_size, generator=g),
-            Tanh(),
-            Linear(hidden_size, hidden_size, generator=g, gain=5 / 3),
             BatchNormID(hidden_size, generator=g),
             Tanh(),
             Linear(hidden_size, vocab_size, generator=g, gain=1.0),

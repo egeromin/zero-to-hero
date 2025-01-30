@@ -68,4 +68,7 @@ Step 28000: validation loss = 2.4070, validation accuracy = 28.41%
 Step 32000: validation loss = 2.4067, validation accuracy = 28.26%
 Final test loss = 2.3887, test accuracy = 28.85%
 
-
+Revert to original MLP (no additional hidden layers),
+context size = 8, 32K training iterations
+Step 32000: validation loss = 2.1723, validation accuracy = 33.30%
+Final test loss = 2.1710, test accuracy = 32.55%
