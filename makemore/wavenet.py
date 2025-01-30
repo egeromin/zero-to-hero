@@ -1,12 +1,10 @@
 """
-Implement a model with variable context length using an MLP,
-following the approach described in:
-https://www.jmlr.org/papers/volume3/bengio03a/bengio03a.pdf
+Implement the wavenet from lecture 5
 """
 
 import math
 from collections import defaultdict
-from typing import Mapping, Iterable
+from typing import Mapping, Iterable, Protocol
 
 import torch
 import torch.nn.functional as F
@@ -16,13 +14,19 @@ from mlp import load_dataset
 
 
 # Steps:
-# 1. Simplify code, remove duplicates, remove manual backprop, remove test functions
-# 2. Implement Embedding layer and FlattenConsecutive layer
-# 3. Fix other layers to use 3-D tensors as inputs
-# 4. Refactor code to use Embedding and FlattenConsecutive - make MLP alike one of the check containers in pytorch.
+# 1. Simplify code, remove duplicates, remove manual backprop, remove test functions  ✅
+# 2. Implement Embedding layer and FlattenConsecutive layer  ✅
+# 3. Fix other layers to use 3-D tensors as inputs  ✅
+# 4. Refactor code to use Embedding and FlattenConsecutive - make MLP alike one of the check containers in pytorch. ✅
 # 5. Test that results are the same for 32K
 # 6. Implement wavenet using a context of size 8 and compare performance after 32K
 # 7. Compare to a similarly sized 'MLP' model.
+
+
+class LayerProtocol(Protocol):
+    def __call__(self, X: torch.Tensor, training: bool = True) -> torch.Tensor: ...
+
+    def parameters(self) -> Iterable[torch.Tensor]: ...
 
 
 # Define the layers we'll use: Linear, Tanh and Softmax
@@ -155,51 +159,59 @@ class BatchNormID:
         yield self.shift
 
 
-class MLP:
+class Embedding:
     def __init__(
-        self,
-        vocab_size: int,
-        context_size: int,
-        embedding_size: int,
-        hidden_size: int,
-        g: torch.Generator,
+        self, vocab_size: int, embedding_size: int, generator: torch.Generator
     ):
+        self.out = None
         self.embedding: torch.Tensor = torch.rand(
-            size=(vocab_size, embedding_size), requires_grad=True, generator=g
+            size=(vocab_size, embedding_size), requires_grad=True, generator=generator
         )
-        self.embedding_grad = None
-        self.x = None
-        self.selected_embeddings = None
-        self.selected_embeddings_grad = None
-        self.layers = [
-            Linear(embedding_size * context_size, hidden_size, generator=g, gain=5 / 3),
-            BatchNormID(hidden_size, generator=g),
-            Tanh(),
-            Linear(hidden_size, hidden_size, generator=g, gain=5 / 3),
-            BatchNormID(hidden_size, generator=g),
-            Tanh(),
-            Linear(hidden_size, hidden_size, generator=g, gain=5 / 3),
-            BatchNormID(hidden_size, generator=g),
-            Tanh(),
-            Linear(hidden_size, vocab_size, generator=g, gain=1.0),
-        ]
 
-    def forward(self, x: torch.Tensor, training: bool = True) -> torch.Tensor:
-        # Forward pass. Do not compute the final softmax,
-        # as this will be calculated inside the loss function,
-        # for numerical stability.
-        self.x = x
-        self.selected_embeddings = self.embedding[x]
-        selected_embeddings_reshaped = self.selected_embeddings.view(
-            self.selected_embeddings.shape[0], -1
-        )
-        output = selected_embeddings_reshaped
-        for layer in self.layers:
-            output = layer(output, training=training)
-        return output
+    def __call__(self, X: torch.Tensor, training: bool = True) -> torch.Tensor:
+        self.out = self.embedding[X]
+        if training:
+            self.out.retain_grad()
+        return self.out
 
     def parameters(self) -> Iterable[torch.Tensor]:
         yield self.embedding
+
+
+class FlattenConsecutive:
+    def __init__(self, stride: int):
+        self.out = None
+        self.stride = stride
+
+    def __call__(self, X: torch.Tensor, training: bool = True) -> torch.Tensor:
+        self.out = X.view(
+            X.shape[0], X.shape[1] // self.stride, X.shape[2] * self.stride
+        )
+        if self.out.shape[1] == 1:
+            self.out = self.out.squeeze(1)
+        if training:
+            self.out.retain_grad()
+        return self.out
+
+    def parameters(self) -> Iterable[torch.Tensor]:
+        # Simple way to define an empty iterator
+        return
+        yield
+
+
+class Sequential:
+    # Not a completely clean API, but OK for now.
+
+    def __init__(self, layers: list[LayerProtocol]):
+        self.layers = layers
+
+    def forward(self, X: torch.Tensor, training: bool = True) -> torch.Tensor:
+        out = X
+        for layer in self.layers:
+            out = layer(out, training=training)
+        return out
+
+    def parameters(self) -> Iterable[torch.Tensor]:
         for layer in self.layers:
             yield from layer.parameters()
 
@@ -214,18 +226,20 @@ class MLP:
 
 @torch.no_grad()
 def calculate_loss_and_accuracy(
-    mlp: MLP, X: torch.Tensor, Y: torch.Tensor
+    model: Sequential, X: torch.Tensor, Y: torch.Tensor
 ) -> tuple[float, float]:
     """Returns a tuple (loss, accuracy)"""
-    logits = mlp.forward(X, training=False)
+    logits = model.forward(X, training=False)
     predictions = logits.argmax(dim=-1)
     assert predictions.shape == Y.shape
     accuracy = sum(predictions == Y) / Y.shape[0]
-    loss = calculate_loss(mlp, logits, Y)
+    loss = calculate_loss(model, logits, Y)
     return loss.item(), accuracy
 
 
-def calculate_loss(mlp: MLP, logits: torch.Tensor, Y: torch.Tensor) -> torch.Tensor:
+def calculate_loss(
+    model: Sequential, logits: torch.Tensor, Y: torch.Tensor
+) -> torch.Tensor:
     # reg_alpha = 0.001
     model_loss = F.cross_entropy(logits, Y)
     # params = iter(mlp.parameters())
@@ -237,11 +251,11 @@ def calculate_loss(mlp: MLP, logits: torch.Tensor, Y: torch.Tensor) -> torch.Ten
 
 
 def train_model(
-    mlp: MLP,
+    model: Sequential,
     X: torch.Tensor,
     Y: torch.Tensor,
     g: torch.Generator,
-) -> MLP:
+) -> Sequential:
     assert X.shape[0] == Y.shape[0]
     # split into train, test and validation sets
     # First shuffle the dataset
@@ -278,10 +292,10 @@ def train_model(
         assert X_batch.shape == (batch_size, X_train.shape[1])
         assert Y_batch.shape == (batch_size,)
 
-        mlp.zero_grad()
+        model.zero_grad()
 
-        logits_batch = mlp.forward(X_batch)
-        loss = calculate_loss(mlp, logits_batch, Y_batch)
+        logits_batch = model.forward(X_batch)
+        loss = calculate_loss(model, logits_batch, Y_batch)
         batch_losses.append(loss.log10().item())
 
         loss.backward()
@@ -306,7 +320,7 @@ def train_model(
                 axes[plot_num][1].set_xlabel("Gradient value")
                 axes[plot_num][1].set_ylabel("Gradient density")
                 legends = []
-                for k, layer in enumerate(mlp.layers):
+                for k, layer in enumerate(model.layers):
                     if isinstance(layer, Tanh):
                         legends.append(f"Layer {k}")
                         activations = layer.out.view(-1)
@@ -338,7 +352,7 @@ def train_model(
             # and negative, symmetrically, since we're using tanh.
             # Alternatively, could also use the ratio of mean absolute values
             # to achieve a similar plot
-            for k, layer in enumerate(mlp.layers):
+            for k, layer in enumerate(model.layers):
                 if isinstance(layer, Linear):
                     weights = next(p for p in layer.parameters() if p.dim() == 2)
                     weights_grad = next(
@@ -352,11 +366,11 @@ def train_model(
                     # ratio = ratios.mean()
                     update_ratios[k].append(ratio.log10().item())
 
-        mlp.update_parameters(learning_rate)
+        model.update_parameters(learning_rate)
 
         # Calculate the validation accuracy
         if i % 4000 == 0:
-            val_loss, val_accuracy = calculate_loss_and_accuracy(mlp, X_val, Y_val)
+            val_loss, val_accuracy = calculate_loss_and_accuracy(model, X_val, Y_val)
             val_losses.append((i, math.log10(val_loss)))
             print(
                 f"Step {i}: validation loss = {val_loss:.4f}, "
@@ -364,7 +378,7 @@ def train_model(
             )
 
     # Calculate the final test accuracy.
-    test_loss, test_accuracy = calculate_loss_and_accuracy(mlp, X_test, Y_test)
+    test_loss, test_accuracy = calculate_loss_and_accuracy(model, X_test, Y_test)
     print(
         f"Final test loss = {test_loss:.4f}, test accuracy = {test_accuracy * 100:.2f}%"
     )
@@ -392,12 +406,12 @@ def train_model(
     plt.tight_layout()
     plt.show()
 
-    return mlp
+    return model
 
 
 @torch.no_grad()
 def sample_from_model(
-    mlp: MLP,
+    model: Sequential,
     g: torch.Generator,
     num_samples: int,
     context_size: int,
@@ -412,7 +426,7 @@ def sample_from_model(
             x = torch.tensor([stoi[c] for c in current_ctx], dtype=torch.long).view(
                 1, -1
             )
-            logits = mlp.forward(x, training=False)
+            logits = model.forward(x, training=False)
             probs = F.softmax(logits, dim=-1)
             sampled_idx = torch.multinomial(probs, num_samples=1, generator=g)
             pred = itos[sampled_idx.item()]
@@ -427,15 +441,28 @@ def main():
     X, Y, stoi = load_dataset(context_size=context_size)
 
     g = torch.Generator().manual_seed(2147483647)
-    mlp = MLP(
-        vocab_size=len(stoi),
-        context_size=context_size,
-        embedding_size=11,
-        hidden_size=50,
-        g=g,
+    vocab_size = len(stoi)
+    context_size = context_size
+    embedding_size = 11
+    hidden_size = 50
+    model = Sequential(
+        [
+            Embedding(vocab_size, embedding_size, generator=g),
+            FlattenConsecutive(stride=context_size),
+            Linear(embedding_size * context_size, hidden_size, generator=g, gain=5 / 3),
+            BatchNormID(hidden_size, generator=g),
+            Tanh(),
+            Linear(hidden_size, hidden_size, generator=g, gain=5 / 3),
+            BatchNormID(hidden_size, generator=g),
+            Tanh(),
+            Linear(hidden_size, hidden_size, generator=g, gain=5 / 3),
+            BatchNormID(hidden_size, generator=g),
+            Tanh(),
+            Linear(hidden_size, vocab_size, generator=g, gain=1.0),
+        ]
     )
-    mlp = train_model(mlp, X, Y, g)
-    sample_from_model(mlp, g=g, num_samples=20, context_size=context_size, stoi=stoi)
+    model = train_model(model, X, Y, g)
+    sample_from_model(model, g=g, num_samples=20, context_size=context_size, stoi=stoi)
 
 
 if __name__ == "__main__":
