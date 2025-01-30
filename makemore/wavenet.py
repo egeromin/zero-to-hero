@@ -383,7 +383,14 @@ def train_model(
         f"Final test loss = {test_loss:.4f}, test accuracy = {test_accuracy * 100:.2f}%"
     )
 
-    axes[2][0].plot(range(len(batch_losses)), batch_losses)
+    batch_indices = torch.tensor(range(len(batch_losses) - 1))
+    batch_losses_tensor = torch.tensor(batch_losses[:-1])
+
+    batch_indices_reshaped = batch_indices.view(-1, 100)
+    batch_losses_reshaped = batch_losses_tensor.view(-1, 100)
+    batch_losses_mean = batch_losses_reshaped.mean(dim=1)
+
+    axes[2][0].plot(batch_indices_reshaped[:, 0], batch_losses_mean)
     axes[2][0].set_xlabel("Training iteration")
     axes[2][0].set_ylabel("Log10 Train loss")
     axes[2][0].set_title("Log10 training losses during the training")
