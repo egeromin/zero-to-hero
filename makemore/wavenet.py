@@ -112,14 +112,14 @@ class BatchNormID:
         self.eps = 1e-8
         self.momentum = momentum
         self.scale = (
-            torch.ones((1, input_size), dtype=torch.float)
-            + torch.randn((1, input_size), generator=generator) * 0.01
+            torch.ones(input_size, dtype=torch.float)
+            + torch.randn(input_size, generator=generator) * 0.01
         )
         self.scale.requires_grad = True
-        self.shift = torch.randn((1, input_size), generator=generator) * 0.01
+        self.shift = torch.randn(input_size, generator=generator) * 0.01
         self.shift.requires_grad = True
-        self.means_running = torch.zeros((1, input_size), dtype=torch.float)
-        self.std_running = torch.ones((1, input_size), dtype=torch.float)
+        self.means_running = torch.zeros(input_size, dtype=torch.float)
+        self.std_running = torch.ones(input_size, dtype=torch.float)
         self.out = None
         self.X = None
         self.means = None
