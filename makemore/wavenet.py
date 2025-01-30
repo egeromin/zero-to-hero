@@ -18,7 +18,7 @@ from mlp import load_dataset
 # 2. Implement Embedding layer and FlattenConsecutive layer  ✅
 # 3. Fix other layers to use 3-D tensors as inputs  ✅
 # 4. Refactor code to use Embedding and FlattenConsecutive - make MLP alike one of the check containers in pytorch. ✅
-# 5. Test that results are the same for 32K
+# 5. Test that results are the same for 32K  ✅
 # 6. Implement wavenet using a context of size 8 and compare performance after 32K
 # 7. Compare to a similarly sized 'MLP' model.
 
