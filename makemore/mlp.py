@@ -104,15 +104,18 @@ class Linear:
                 generator=generator,
             )
 
-    def __call__(self, X: torch.Tensor, training: bool = True) -> torch.Tensor:
+    def __call__(
+        self, X: torch.Tensor, training: bool = True, use_manual_grad: bool = False
+    ) -> torch.Tensor:
         self.out = X @ self.weights
         if self.bias is not None:
             self.out += self.bias
         if training:
-            # The following are not "leaf tensors" and therefore must be explicitly instructed
-            # to retain "tensor.grad".
-            self.out.retain_grad()
             self.X = X
+            if not use_manual_grad:
+                # The following are not "leaf tensors" and therefore must be explicitly instructed
+                # to retain "tensor.grad".
+                self.out.retain_grad()
         return self.out
 
     def parameters(self) -> Iterable[torch.Tensor]:
@@ -150,9 +153,11 @@ class Tanh:
         self.out = None
         self.out_grad = None
 
-    def __call__(self, X: torch.Tensor, training: bool = True) -> torch.Tensor:
+    def __call__(
+        self, X: torch.Tensor, training: bool = True, use_manual_grad: bool = False
+    ) -> torch.Tensor:
         self.out = X.tanh()
-        if training:
+        if training and not use_manual_grad:
             self.out.retain_grad()
         return self.out
 
@@ -217,7 +222,9 @@ class BatchNormID:
         self.means_grad = None
         self.var_grad = None
 
-    def __call__(self, X: torch.Tensor, training: bool = True) -> torch.Tensor:
+    def __call__(
+        self, X: torch.Tensor, training: bool = True, use_manual_grad: bool = False
+    ) -> torch.Tensor:
         if training:
             self.X = X
             self.means = X.mean(dim=0, keepdim=True)
@@ -226,7 +233,8 @@ class BatchNormID:
             self.u = X - self.means
             self.normalised = self.u / self.v
             self.out = self.normalised * self.scale + self.shift
-            self.out.retain_grad()
+            if not use_manual_grad:
+                self.out.retain_grad()
 
             with torch.no_grad():
                 self.means_running = (
@@ -313,7 +321,9 @@ class MLP:
             Linear(hidden_size, vocab_size, generator=g, gain=1.0),
         ]
 
-    def forward(self, x: torch.Tensor, training: bool = True) -> torch.Tensor:
+    def forward(
+        self, x: torch.Tensor, training: bool = True, use_manual_grad: bool = False
+    ) -> torch.Tensor:
         # Forward pass. Do not compute the final softmax,
         # as this will be calculated inside the loss function,
         # for numerical stability.
@@ -324,7 +334,7 @@ class MLP:
         )
         output = selected_embeddings_reshaped
         for layer in self.layers:
-            output = layer(output, training=training)
+            output = layer(output, training=training, use_manual_grad=use_manual_grad)
         return output
 
     @torch.no_grad()
@@ -439,7 +449,7 @@ def train_model(
 
     # num_training_iterations = 200_001
     # While experimenting, revert to a lower number of iterations.
-    num_training_iterations = 32_001
+    num_training_iterations = 4_001
     val_losses: list[tuple[int, float]] = []
     batch_losses: list[float] = []
     update_ratios: Mapping[int, list[float]] = defaultdict(list)
@@ -457,7 +467,9 @@ def train_model(
         if use_manual_grad:
             mlp.manual_zero_grad()
 
-        logits_batch = mlp.forward(X_batch)
+        logits_batch = mlp.forward(
+            X_batch, use_manual_grad=use_manual_grad, training=True
+        )
         loss = calculate_loss(mlp, logits_batch, Y_batch)
         batch_losses.append(loss.log10().item())
 
@@ -628,7 +640,13 @@ def main():
         hidden_size=50,
         g=g,
     )
-    mlp = train_model(mlp, X, Y, g, use_manual_grad=True)
+    use_manual_grad = True
+
+    if use_manual_grad:
+        with torch.no_grad():
+            mlp = train_model(mlp, X, Y, g, use_manual_grad=True)
+    else:
+        mlp = train_model(mlp, X, Y, g, use_manual_grad=False)
     sample_from_model(mlp, g=g, num_samples=20, context_size=context_size, stoi=stoi)
 
 
