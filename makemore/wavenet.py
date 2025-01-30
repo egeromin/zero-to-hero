@@ -108,6 +108,7 @@ class BatchNormID:
     def __init__(
         self, input_size: int, generator: torch.Generator, momentum: float = 0.999
     ):
+        """input_size is the size of the hidden layer"""
         self.input_size = input_size
         self.eps = 1e-8
         self.momentum = momentum
@@ -131,8 +132,13 @@ class BatchNormID:
     def __call__(self, X: torch.Tensor, training: bool = True) -> torch.Tensor:
         if training:
             self.X = X
-            self.means = X.mean(dim=0, keepdim=True)
-            self.std = X.std(dim=0, keepdim=True)
+            # The dimensions to compute the mean and std along.
+            # This approach will work both if X is a rank 2 tensor, or a rank 3 tensor.
+            dim = list(range(X.dim() - 1))
+            self.means = X.mean(dim=dim, keepdim=True)
+            self.std = X.std(dim=dim, keepdim=True)
+            assert list(self.means.shape) == [1] * (X.dim() - 1) + [X.shape[-1]]
+            assert self.means.shape == self.std.shape
             self.v = self.std + self.eps
             self.u = X - self.means
             self.normalised = self.u / self.v
