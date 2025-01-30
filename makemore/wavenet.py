@@ -19,8 +19,9 @@ from mlp import load_dataset
 # 3. Fix other layers to use 3-D tensors as inputs  ✅
 # 4. Refactor code to use Embedding and FlattenConsecutive - make MLP alike one of the check containers in pytorch. ✅
 # 5. Test that results are the same for 32K  ✅
-# 6. Implement wavenet using a context of size 8 and compare performance after 32K
-# 7. Compare to a similarly sized 'MLP' model.
+# 6. Implement wavenet using a context of size 8 and compare performance after 32K  ✅
+# 7. Experiment comparing wavenet to similarly sized 'MLP' models.
+# 8. Run best model on 200K training iterations.
 
 
 class LayerProtocol(Protocol):
@@ -456,12 +457,20 @@ def main():
     g = torch.Generator().manual_seed(2147483647)
     vocab_size = len(stoi)
     embedding_size = 11
-    hidden_size = 50
+    hidden_size = 102 // 3
     model = Sequential(
         [
             Embedding(vocab_size, embedding_size, generator=g),
-            FlattenConsecutive(stride=context_size),
-            Linear(embedding_size * context_size, hidden_size, generator=g, gain=5 / 3),
+            FlattenConsecutive(stride=2),
+            Linear(embedding_size * 2, hidden_size, generator=g, gain=5 / 3),
+            BatchNormID(hidden_size, generator=g),
+            Tanh(),
+            FlattenConsecutive(stride=2),
+            Linear(hidden_size * 2, hidden_size, generator=g, gain=5 / 3),
+            BatchNormID(hidden_size, generator=g),
+            Tanh(),
+            FlattenConsecutive(stride=2),
+            Linear(hidden_size * 2, hidden_size, generator=g, gain=5 / 3),
             BatchNormID(hidden_size, generator=g),
             Tanh(),
             Linear(hidden_size, vocab_size, generator=g, gain=1.0),
