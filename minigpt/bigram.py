@@ -5,6 +5,7 @@ as a refresher.
 
 import itertools
 from pathlib import Path
+from typing import Mapping
 
 import torch
 import torch.nn.functional as F
@@ -15,7 +16,9 @@ from torch.optim import SGD
 torch.manual_seed(1337)
 
 
-def load_dataset(context_size: int):
+def load_dataset(
+    context_size: int,
+) -> tuple[torch.Tensor, torch.Tensor, Mapping[str, int]]:
     """
     Returns a tensor of X's, Y's, already prepared for training,
     given the context size.
@@ -59,9 +62,22 @@ class BigramModel(torch.nn.Module):
         return self.embedding.forward(x)
 
 
-def sample_from_model():
-    # TODO
-    pass
+def sample_from_model(model, stoi: Mapping[str, int], num_samples: int):
+    itos = {i: s for s, i in stoi.items()}
+    for _sample in range(num_samples):
+        start_char = "."
+        next_char = None
+        generated_chars = []
+        while next_char != ".":
+            current_char = next_char or start_char
+            input = torch.tensor([stoi[current_char]], dtype=torch.long)
+            logits = model.forward(input)
+            probs = F.softmax(logits, dim=1)
+            sample = torch.multinomial(probs, num_samples=1)
+            next_char = itos[sample.item()]
+            generated_chars.append(next_char)
+
+        print("".join(generated_chars))
 
 
 def main():
@@ -80,7 +96,7 @@ def main():
 
     vocab_size = len(stoi)
     model = BigramModel(vocab_size=vocab_size)
-    max_training_iterations = 1001
+    max_training_iterations = 10001
     batch_size = 32
     opt = SGD(model.parameters(), lr=0.01)
 
@@ -94,7 +110,7 @@ def main():
         loss.backward()
         opt.step()
 
-        if i % 100 == 0:
+        if i % 500 == 0:
             logits_val = model.forward(X_val)
             preds_val = logits_val.argmax(dim=1)
             val_loss = F.cross_entropy(logits_val, Y_val)
@@ -102,6 +118,8 @@ def main():
             print(
                 f"{i}: train loss = {loss.item():4f}, val loss = {val_loss.item():4f}, val accuracy = {val_accuracy * 100:.2f}%"
             )
+
+    sample_from_model(model, stoi, num_samples=10)
 
 
 if __name__ == "__main__":
