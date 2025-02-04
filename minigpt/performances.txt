@@ -1,0 +1,5 @@
+Baseline with AdamW:
+9000: train loss = 1.643144, val loss = 2.055470, val accuracy = 40.70%
+9500: train loss = 1.903642, val loss = 2.063898, val accuracy = 40.46%
+10000: train loss = 2.706694, val loss = 2.057284, val accuracy = 40.77%
+

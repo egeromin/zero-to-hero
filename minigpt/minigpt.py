@@ -18,7 +18,7 @@ from typing import Mapping
 import torch
 import torch.nn.functional as F
 from torch import nn
-from torch.optim import SGD
+from torch.optim import AdamW
 
 
 torch.manual_seed(1337)
@@ -119,7 +119,7 @@ def main():
     )
     max_training_iterations = 10001
     batch_size = 32
-    opt = SGD(model.parameters(), lr=0.01)
+    opt = AdamW(model.parameters(), lr=0.01)
 
     for i in range(max_training_iterations):
         perm = torch.randperm(len(X["train"]))[:batch_size]
