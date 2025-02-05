@@ -6,7 +6,7 @@ To-do list:
 1. Dataset loader with train + val split.  ✅
 2. Initial MLP model definition, and loop.  ✅
 3. Define a single self attention head, untested  ✅
-4. Add self attention to model, with bag of words embedding
+4. Add self attention to model, with bag of words embedding  ✅
 5. Add positional encoding to input
 6. Define multiple self attention heads
 7. Add residual connections
@@ -74,7 +74,7 @@ class SelfAttention(nn.Module):
     # keys, queries, values
     # We learn the keys, queries and values for any embedding vector
 
-    def __init__(self, embedding_size: int, query_size: int):
+    def __init__(self, embedding_size: int, query_size: int, context_size: int):
         super().__init__()
         self.embedding_size = embedding_size
         self.query_size = query_size
@@ -83,7 +83,8 @@ class SelfAttention(nn.Module):
         self.values = nn.Linear(embedding_size, embedding_size)
         # self-attention mask
         self.register_buffer(
-            "mask", ~torch.tril(torch.ones(query_size, dtype=torch.bool))
+            "mask",
+            ~torch.tril(torch.ones(context_size, context_size, dtype=torch.bool)),
         )
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
@@ -91,31 +92,44 @@ class SelfAttention(nn.Module):
         assert E == self.embedding_size
         keys = self.keys.forward(x)
         queries = self.queries.forward(x)
-        assert keys.shape == queries.shape == torch.tensor([B, C, self.query_size])
+        assert tuple(keys.shape) == tuple(queries.shape) == (B, C, self.query_size)
+
         # sa == "self attention"
         sa = queries @ keys.transpose(1, 2)
-        assert sa.shape == torch.tensor([B, C, C])
+        assert tuple(sa.shape) == (B, C, C)
 
         # Mask the *upper half* since each query should not interact
         # with keys that come after it in the context.
         masked_sa = torch.where(self.mask, -torch.inf, sa)
-        assert masked_sa.shape == torch.tensor([B, C, C])
-        norm_masked_sa = F.softmax(masked_sa, dim=2)
-        assert norm_masked_sa.shape == torch.tensor([B, C, C])
+        assert tuple(masked_sa.shape) == (B, C, C)
+        norm_masked_sa = F.softmax(
+            masked_sa / torch.sqrt(torch.tensor(self.query_size).float()), dim=2
+        )
+        assert tuple(norm_masked_sa.shape) == (B, C, C)
 
         values = self.values.forward(x)
-        assert values.shape == torch.tensor([B, C, E])
+        assert tuple(values.shape) == (B, C, E)
         outputs = norm_masked_sa @ values
         return outputs
 
 
 class MiniGPT(torch.nn.Module):
     def __init__(
-        self, vocab_size: int, context_size: int, embedding_size: int, hidden_size: int
+        self,
+        vocab_size: int,
+        context_size: int,
+        embedding_size: int,
+        hidden_size: int,
+        query_size: int,
     ):
         super().__init__()
         # First version: replicate MLP results
         self.embedding = nn.Embedding(vocab_size, embedding_size)
+        self.attention_head = SelfAttention(
+            embedding_size=embedding_size,
+            query_size=query_size,
+            context_size=context_size,
+        )
         self.flatten = nn.Flatten()
         self.linear_1 = nn.Linear(embedding_size * context_size, hidden_size)
         self.norm = nn.LayerNorm(hidden_size)
@@ -124,7 +138,8 @@ class MiniGPT(torch.nn.Module):
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         emb = self.embedding.forward(x)
-        flat = self.flatten(emb)
+        sa = self.attention_head(emb)
+        flat = self.flatten(sa)
         hidden = self.linear_1(flat)
         tanh = self.tanh(self.norm(hidden))
         return self.linear_2(tanh)
@@ -165,8 +180,9 @@ def main():
         embedding_size=64,
         context_size=context_size,
         hidden_size=32,
+        query_size=16,
     )
-    max_training_iterations = 10001
+    max_training_iterations = 10_001
     batch_size = 32
     opt = AdamW(model.parameters(), lr=0.01)
 

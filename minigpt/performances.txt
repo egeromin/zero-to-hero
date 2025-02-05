@@ -1,5 +1,13 @@
-Baseline with AdamW:
+Baseline with AdamW, 10K iterations:
 9000: train loss = 1.643144, val loss = 2.055470, val accuracy = 40.70%
 9500: train loss = 1.903642, val loss = 2.063898, val accuracy = 40.46%
 10000: train loss = 2.706694, val loss = 2.057284, val accuracy = 40.77%
+
+Adding one self attention head, 10K iterations:
+9000: train loss = 1.976574, val loss = 2.180738, val accuracy = 37.14%
+9500: train loss = 1.825904, val loss = 2.153589, val accuracy = 38.17%
+10000: train loss = 2.258611, val loss = 2.144004, val accuracy = 38.13%
+a, dume not, therath, Ghat thithed,
+Nost re'l gour thane himfan:
+My Iid lay te be; hill I dourd of, 
 
