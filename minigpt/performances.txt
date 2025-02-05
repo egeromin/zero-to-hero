@@ -11,3 +11,13 @@ a, dume not, therath, Ghat thithed,
 Nost re'l gour thane himfan:
 My Iid lay te be; hill I dourd of, 
 
+Multi-head attention, 10K iterations:
+9000: train loss = 1.947432, val loss = 2.200529, val accuracy = 36.73%
+9500: train loss = 2.175491, val loss = 2.201480, val accuracy = 36.90%
+10000: train loss = 2.035626, val loss = 2.185989, val accuracy = 36.79%
+ foun, beose, an is meist an!
+
+ASEsERDO:
+Micowsised chove sile put at thif sextill
+Hio sfale seipe,
+

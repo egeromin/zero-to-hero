@@ -7,11 +7,17 @@ To-do list:
 2. Initial MLP model definition, and loop.  ✅
 3. Define a single self attention head, untested  ✅
 4. Add self attention to model, with bag of words embedding  ✅
-5. Add positional encoding to input
-6. Define multiple self attention heads
+5. Define multi-head attention and a self attention block that uses it. ✅
+6. Add positional encodings
 7. Add residual connections
 8. Add LayerNorm -> N.B, should come before the multi head attention, unlike in the paper.
 9. Add dropout
+10. Refactor multi head attention to use 4D tensors
+11. Scale up - multiple self attention blocks, increase parameters to what is used in lectures.
+    Run locally for a few iterations and see how long it takes. Estimate how long it would take
+    to run 100K iterations.
+12. Add plots of training losses, validation losses and activations at specific points in the model.
+13. Train 100K iterations on GPU
 """
 
 from pathlib import Path
@@ -113,6 +119,61 @@ class SelfAttention(nn.Module):
         return outputs
 
 
+class MultiHeadAttention(nn.Module):
+    # TODO: refactor and use 4-D tensors internally, for efficiency
+
+    def __init__(
+        self, embedding_size: int, query_size: int, context_size: int, num_heads: int
+    ):
+        super().__init__()
+        self.embedding_size = embedding_size
+        self.query_size = query_size
+        self.context_size = context_size
+        self.num_heads = num_heads
+        self.heads = [
+            SelfAttention(
+                embedding_size=embedding_size,
+                query_size=query_size,
+                context_size=context_size,
+            )
+            for _ in range(num_heads)
+        ]
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        B, C, E = x.shape
+        assert E == self.embedding_size
+        head_outputs = [head.forward(x) for head in self.heads]
+        output = torch.stack(head_outputs, dim=2)
+        assert tuple(output.shape) == (B, C, self.num_heads, E)
+        return output
+
+
+class AttentionBlock(nn.Module):
+    def __init__(
+        self, embedding_size: int, query_size: int, context_size: int, num_heads: int
+    ):
+        super().__init__()
+        self.embedding_size = embedding_size
+        self.query_size = query_size
+        self.context_size = context_size
+        self.num_heads = num_heads
+        self.multi_head_attention = MultiHeadAttention(
+            embedding_size=embedding_size,
+            query_size=query_size,
+            context_size=context_size,
+            num_heads=num_heads,
+        )
+        self.flatten = nn.Flatten(start_dim=2, end_dim=3)
+        self.linear = nn.Linear(embedding_size * num_heads, embedding_size)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        multi = self.multi_head_attention(x)
+        multi_flat = self.flatten(multi)
+        output = self.linear(multi_flat)
+        assert output.shape == x.shape
+        return output
+
+
 class MiniGPT(torch.nn.Module):
     def __init__(
         self,
@@ -123,12 +184,12 @@ class MiniGPT(torch.nn.Module):
         query_size: int,
     ):
         super().__init__()
-        # First version: replicate MLP results
         self.embedding = nn.Embedding(vocab_size, embedding_size)
-        self.attention_head = SelfAttention(
+        self.attention_block = AttentionBlock(
             embedding_size=embedding_size,
             query_size=query_size,
             context_size=context_size,
+            num_heads=4,
         )
         self.flatten = nn.Flatten()
         self.linear_1 = nn.Linear(embedding_size * context_size, hidden_size)
@@ -138,7 +199,7 @@ class MiniGPT(torch.nn.Module):
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         emb = self.embedding.forward(x)
-        sa = self.attention_head(emb)
+        sa = self.attention_block(emb)
         flat = self.flatten(sa)
         hidden = self.linear_1(flat)
         tanh = self.tanh(self.norm(hidden))
@@ -182,6 +243,8 @@ def main():
         hidden_size=32,
         query_size=16,
     )
+    total_params = sum(p.numel() for p in model.parameters())
+    print(f"Number of parameters: {total_params}")
     max_training_iterations = 10_001
     batch_size = 32
     opt = AdamW(model.parameters(), lr=0.01)
@@ -205,6 +268,7 @@ def main():
                 f"{i}: train loss = {loss.item():4f}, val loss = {val_loss.item():4f}, val accuracy = {val_accuracy * 100:.2f}%"
             )
 
+    print(f"Number of parameters: {total_params}")
     print(sample_from_model(model, stoi=stoi, input_str=input_str, num_chars=100))
 
 
