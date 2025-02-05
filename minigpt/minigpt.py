@@ -3,13 +3,15 @@ Single-module implementation of GPT on TinyShakespeare data.
 
 To-do list:
 
-1. Dataset loader with train + val split.
-2. Initial MLP model definition, and loop.
-3. Define a single self attention head & measure performance locally.
-4. Define multiple self attention heads & measure performance.
-5. Add residual connections.
-6. Add LayerNorm -> N.B, should come before the multi head attention, unlike in the paper.
-7. Add dropout.
+1. Dataset loader with train + val split.  ✅
+2. Initial MLP model definition, and loop.  ✅
+3. Define a single self attention head, untested  ✅
+4. Add self attention to model, with bag of words embedding
+5. Add positional encoding to input
+6. Define multiple self attention heads
+7. Add residual connections
+8. Add LayerNorm -> N.B, should come before the multi head attention, unlike in the paper.
+9. Add dropout
 """
 
 from pathlib import Path
@@ -58,6 +60,53 @@ def load_dataset(
     Y_val = Y[split:]
 
     return {"train": X_train, "val": X_val}, {"train": Y_train, "val": Y_val}, stoi
+
+
+class SelfAttention(nn.Module):
+    # What I recall from self-attention: each element in the context
+    # talks to every other element in the context
+    # batch * context_size * embedding_size
+    # B * C * E
+    # Also, need to ensure that we can interact only with what comes
+    # before us, via the masking softmax trick.
+    # Now, for each element in the context, have a self attention
+    # matrix, which is a parameter of the model.
+    # keys, queries, values
+    # We learn the keys, queries and values for any embedding vector
+
+    def __init__(self, embedding_size: int, query_size: int):
+        super().__init__()
+        self.embedding_size = embedding_size
+        self.query_size = query_size
+        self.keys = nn.Linear(embedding_size, query_size)
+        self.queries = nn.Linear(embedding_size, query_size)
+        self.values = nn.Linear(embedding_size, embedding_size)
+        # self-attention mask
+        self.register_buffer(
+            "mask", ~torch.tril(torch.ones(query_size, dtype=torch.bool))
+        )
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        B, C, E = x.shape
+        assert E == self.embedding_size
+        keys = self.keys.forward(x)
+        queries = self.queries.forward(x)
+        assert keys.shape == queries.shape == torch.tensor([B, C, self.query_size])
+        # sa == "self attention"
+        sa = queries @ keys.transpose(1, 2)
+        assert sa.shape == torch.tensor([B, C, C])
+
+        # Mask the *upper half* since each query should not interact
+        # with keys that come after it in the context.
+        masked_sa = torch.where(self.mask, -torch.inf, sa)
+        assert masked_sa.shape == torch.tensor([B, C, C])
+        norm_masked_sa = F.softmax(masked_sa, dim=2)
+        assert norm_masked_sa.shape == torch.tensor([B, C, C])
+
+        values = self.values.forward(x)
+        assert values.shape == torch.tensor([B, C, E])
+        outputs = norm_masked_sa @ values
+        return outputs
 
 
 class MiniGPT(torch.nn.Module):
