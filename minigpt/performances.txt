@@ -56,3 +56,18 @@ With dropout, 10K
 10000: train loss = 2.062665, val loss = 2.525136, val accuracy = 31.74%
 Number of parameters: 58881
 enet hot igletted thet ZA to  arentte fesor tor quiciseninet therf f teoo bs eith t th the stie thou
+
+With feedforward in attention block
+8500: train loss = 2.246442, val loss = 2.690192, val accuracy = 29.87%
+9000: train loss = 3.131166, val loss = 2.497395, val accuracy = 31.72%
+9500: train loss = 2.375231, val loss = 2.504447, val accuracy = 31.15%
+10000: train loss = 3.002119, val loss = 2.546999, val accuracy = 29.90%
+Number of parameters: 87809
+
+And'mlths nors?
+Wimc sostrer blut te.
+Win; Ifroures; I wuth'dabrengULED:ERIZABETeothfakiagucar.
+
+EE
+
+

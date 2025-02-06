@@ -158,12 +158,11 @@ class MultiHeadAttention(nn.Module):
 
 
 class FeedForward(nn.Module):
-
     def __init__(self, embedding_size: int):
         super().__init__()
-        self.linear_1 = nn.Linear(embedding_size, 4*embedding_size)
+        self.linear_1 = nn.Linear(embedding_size, 4 * embedding_size)
         self.relu = nn.ReLU()
-        self.linear_2 = nn.Linear(4*embedding_size, embedding_size)
+        self.linear_2 = nn.Linear(4 * embedding_size, embedding_size)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         l1 = self.linear_1(x)
@@ -224,9 +223,16 @@ class MiniGPT(torch.nn.Module):
         )
         self.flatten = nn.Flatten(start_dim=1, end_dim=2)
         self.linear = nn.Linear(embedding_size * context_size, vocab_size)
+        self.apply(self._init_weights)
 
-    # def _init_weight(self):
-    #     for param in self.parameters():
+    @staticmethod
+    def _init_weights(module):
+        if isinstance(module, nn.Linear):
+            nn.init.normal_(module.weight, mean=0.0, std=0.02)
+            if module.bias is not None:
+                nn.init.zeros_(module.bias)
+        elif isinstance(module, nn.Embedding):
+            nn.init.normal_(module.weight, mean=0.0, std=0.02)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         positions = torch.tensor(range(self.context_size), dtype=torch.long)
