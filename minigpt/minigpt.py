@@ -13,6 +13,7 @@ To-do list:
 7. Add residual connections ✅
 8. Add LayerNorm -> N.B, should come before the multi head attention, unlike in the paper. ✅
 9. Add dropout ✅
+9.5 Fix Feedforward to include non-linearity!
 10. Refactor multi head attention to use 4D tensors
 11. Scale up - multiple self attention blocks, increase parameters to what is used in lectures.
     Run locally for a few iterations and see how long it takes. Estimate how long it would take
@@ -31,6 +32,7 @@ from torch.optim import AdamW
 
 
 torch.manual_seed(1337)
+DROPOUT = 0.2
 
 
 def load_dataset(
@@ -155,6 +157,20 @@ class MultiHeadAttention(nn.Module):
         return output
 
 
+class FeedForward(nn.Module):
+
+    def __init__(self, embedding_size: int):
+        super().__init__()
+        self.linear_1 = nn.Linear(embedding_size, 4*embedding_size)
+        self.relu = nn.ReLU()
+        self.linear_2 = nn.Linear(4*embedding_size, embedding_size)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        l1 = self.linear_1(x)
+        rl = self.relu(l1)
+        return self.linear_2(rl)
+
+
 class AttentionBlock(nn.Module):
     def __init__(
         self, embedding_size: int, query_size: int, context_size: int, num_heads: int
@@ -171,22 +187,14 @@ class AttentionBlock(nn.Module):
             context_size=context_size,
             num_heads=num_heads,
         )
-        self.drop_1 = nn.Dropout(p=0.1)
+        self.drop_1 = nn.Dropout(p=DROPOUT)
         self.norm_2 = nn.LayerNorm(embedding_size)
-        self.linear = nn.Linear(embedding_size, embedding_size)
-        self.drop_2 = nn.Dropout(p=0.1)
+        self.feed_forward = FeedForward(embedding_size)
+        self.drop_2 = nn.Dropout(p=DROPOUT)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        norm_1 = self.norm_1(x)
-
-        # includes residual connection
-        multi = self.drop_1(self.multi_head_attention(norm_1)) + x
-
-        norm_2 = self.norm_2(multi)
-
-        # includes residual connection
-        output = self.drop_2(self.linear(norm_2)) + multi
-
+        multi = self.drop_1(self.multi_head_attention(self.norm_1(x))) + x
+        output = self.drop_2(self.feed_forward(self.norm_2(multi))) + multi
         assert output.shape == x.shape
         return output
 
@@ -207,7 +215,7 @@ class MiniGPT(torch.nn.Module):
         self.embedding = nn.Embedding(vocab_size, embedding_size)
         # Learned positional encoding.
         self.positional_encoding = nn.Embedding(context_size, embedding_size)
-        self.dropout = nn.Dropout(p=0.1)
+        self.dropout = nn.Dropout(p=DROPOUT)
         self.attention_block = AttentionBlock(
             embedding_size=embedding_size,
             query_size=query_size,
@@ -216,6 +224,9 @@ class MiniGPT(torch.nn.Module):
         )
         self.flatten = nn.Flatten(start_dim=1, end_dim=2)
         self.linear = nn.Linear(embedding_size * context_size, vocab_size)
+
+    # def _init_weight(self):
+    #     for param in self.parameters():
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         positions = torch.tensor(range(self.context_size), dtype=torch.long)
