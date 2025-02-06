@@ -10,7 +10,7 @@ To-do list:
 5. Define multi-head attention and a self attention block that uses it. ✅
 5.5. Remove everything that's not a transformer from the model. ✅
 6. Add positional encodings ✅
-7. Add residual connections
+7. Add residual connections ✅
 8. Add LayerNorm -> N.B, should come before the multi head attention, unlike in the paper.
 9. Add dropout
 10. Refactor multi head attention to use 4D tensors
@@ -139,13 +139,19 @@ class MultiHeadAttention(nn.Module):
             )
             for _ in range(num_heads)
         ]
+        self.flatten = nn.Flatten(start_dim=2, end_dim=3)
+        self.linear = nn.Linear(embedding_size * num_heads, embedding_size)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         B, C, E = x.shape
         assert E == self.embedding_size
         head_outputs = [head.forward(x) for head in self.heads]
-        output = torch.stack(head_outputs, dim=2)
-        assert tuple(output.shape) == (B, C, self.num_heads, E)
+        stacked = torch.stack(head_outputs, dim=2)
+        assert tuple(stacked.shape) == (B, C, self.num_heads, E)
+        flat = self.flatten(stacked)
+        assert tuple(flat.shape) == (B, C, self.num_heads * E)
+        output = self.linear(flat)
+        assert tuple(output.shape) == (B, C, E)
         return output
 
 
@@ -164,13 +170,11 @@ class AttentionBlock(nn.Module):
             context_size=context_size,
             num_heads=num_heads,
         )
-        self.flatten = nn.Flatten(start_dim=2, end_dim=3)
-        self.linear = nn.Linear(embedding_size * num_heads, embedding_size)
+        self.linear = nn.Linear(embedding_size, embedding_size)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        multi = self.multi_head_attention(x)
-        multi_flat = self.flatten(multi)
-        output = self.linear(multi_flat)
+        multi = self.multi_head_attention(x) + x
+        output = self.linear(multi) + multi
         assert output.shape == x.shape
         return output
 

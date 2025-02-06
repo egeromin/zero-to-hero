@@ -35,3 +35,11 @@ DARY:
 Whall,, bilitheve,
 heve, lle sea piortin Ghon ro y :
 't cen
+
+With residual connections, 10K
+
+10000: train loss = 2.532783, val loss = 2.475182, val accuracy = 31.49%
+Number of parameters: 58625
+y-ky plossos ofa nay t plaplow thot'dsserteswalls ss sorch.;
+Nerwe psofstll nhopsoult:
+I llse nxaol 
