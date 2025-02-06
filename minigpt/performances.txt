@@ -21,3 +21,8 @@ ASEsERDO:
 Micowsised chove sile put at thif sextill
 Hio sfale seipe,
 
+Multi-head attention, remove everything that's not a transformer
+10000: train loss = 2.470916, val loss = 2.567218, val accuracy = 30.54%
+Number of parameters: 53953
+tu naive ly mhre borve dlcreuk watl navpreee ly fofeod I fikli: sury uossin to nassero mewy Anel hor
+

@@ -8,6 +8,7 @@ To-do list:
 3. Define a single self attention head, untested  ✅
 4. Add self attention to model, with bag of words embedding  ✅
 5. Define multi-head attention and a self attention block that uses it. ✅
+5.5. Remove everything that's not a transformer from the model. ✅
 6. Add positional encodings
 7. Add residual connections
 8. Add LayerNorm -> N.B, should come before the multi head attention, unlike in the paper.
@@ -180,7 +181,6 @@ class MiniGPT(torch.nn.Module):
         vocab_size: int,
         context_size: int,
         embedding_size: int,
-        hidden_size: int,
         query_size: int,
     ):
         super().__init__()
@@ -191,19 +191,14 @@ class MiniGPT(torch.nn.Module):
             context_size=context_size,
             num_heads=4,
         )
-        self.flatten = nn.Flatten()
-        self.linear_1 = nn.Linear(embedding_size * context_size, hidden_size)
-        self.norm = nn.LayerNorm(hidden_size)
-        self.tanh = nn.Tanh()
-        self.linear_2 = nn.Linear(hidden_size, vocab_size)
+        self.flatten = nn.Flatten(start_dim=1, end_dim=2)
+        self.linear = nn.Linear(embedding_size * context_size, vocab_size)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         emb = self.embedding.forward(x)
         sa = self.attention_block(emb)
         flat = self.flatten(sa)
-        hidden = self.linear_1(flat)
-        tanh = self.tanh(self.norm(hidden))
-        return self.linear_2(tanh)
+        return self.linear(flat)
 
 
 def sample_from_model(
@@ -240,7 +235,6 @@ def main():
         vocab_size=vocab_size,
         embedding_size=64,
         context_size=context_size,
-        hidden_size=32,
         query_size=16,
     )
     total_params = sum(p.numel() for p in model.parameters())
