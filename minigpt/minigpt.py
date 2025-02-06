@@ -13,13 +13,15 @@ To-do list:
 7. Add residual connections ✅
 8. Add LayerNorm -> N.B, should come before the multi head attention, unlike in the paper. ✅
 9. Add dropout ✅
-9.5 Fix Feedforward to include non-linearity!
-10. Refactor multi head attention to use 4D tensors
+9.5 Fix Feedforward to include non-linearity!  ✅
+10. Add plots of training losses, validation losses and activations at specific points in the model.
+    In particular, add estimates of train/val loss by calculating the mean cross many mini batches.
 11. Scale up - multiple self attention blocks, increase parameters to what is used in lectures.
     Run locally for a few iterations and see how long it takes. Estimate how long it would take
-    to run 100K iterations.
-12. Add plots of training losses, validation losses and activations at specific points in the model.
-13. Train 100K iterations on GPU
+    to run N iterations.
+12. Train N iterations on GPU
+13. Refactor multi head attention to use 4D tensors
+14. Refactor to use flash attention, if available
 """
 
 from pathlib import Path
