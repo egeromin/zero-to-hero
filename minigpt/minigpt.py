@@ -12,7 +12,7 @@ To-do list:
 6. Add positional encodings ✅
 7. Add residual connections ✅
 8. Add LayerNorm -> N.B, should come before the multi head attention, unlike in the paper. ✅
-9. Add dropout
+9. Add dropout ✅
 10. Refactor multi head attention to use 4D tensors
 11. Scale up - multiple self attention blocks, increase parameters to what is used in lectures.
     Run locally for a few iterations and see how long it takes. Estimate how long it would take
@@ -171,14 +171,22 @@ class AttentionBlock(nn.Module):
             context_size=context_size,
             num_heads=num_heads,
         )
+        self.drop_1 = nn.Dropout(p=0.1)
         self.norm_2 = nn.LayerNorm(embedding_size)
         self.linear = nn.Linear(embedding_size, embedding_size)
+        self.drop_2 = nn.Dropout(p=0.1)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         norm_1 = self.norm_1(x)
-        multi = self.multi_head_attention(norm_1) + x  # includes residual connection
+
+        # includes residual connection
+        multi = self.drop_1(self.multi_head_attention(norm_1)) + x
+
         norm_2 = self.norm_2(multi)
-        output = self.linear(norm_2) + multi  # includes residual connection
+
+        # includes residual connection
+        output = self.drop_2(self.linear(norm_2)) + multi
+
         assert output.shape == x.shape
         return output
 
@@ -199,6 +207,7 @@ class MiniGPT(torch.nn.Module):
         self.embedding = nn.Embedding(vocab_size, embedding_size)
         # Learned positional encoding.
         self.positional_encoding = nn.Embedding(context_size, embedding_size)
+        self.dropout = nn.Dropout(p=0.1)
         self.attention_block = AttentionBlock(
             embedding_size=embedding_size,
             query_size=query_size,
@@ -213,7 +222,8 @@ class MiniGPT(torch.nn.Module):
         positions_broadcast = torch.ones_like(x) * positions
         emb = self.embedding.forward(x)
         pos = self.positional_encoding.forward(positions_broadcast)
-        sa = self.attention_block(emb + pos)
+        drop = self.dropout(emb + pos)
+        sa = self.attention_block(drop)
         flat = self.flatten(sa)
         return self.linear(flat)
 
@@ -254,6 +264,7 @@ def main():
         context_size=context_size,
         query_size=16,
     )
+    model.train()
     total_params = sum(p.numel() for p in model.parameters())
     print(f"Number of parameters: {total_params}")
     max_training_iterations = 10_001
@@ -271,15 +282,19 @@ def main():
         opt.step()
 
         if i % 500 == 0:
-            logits_val = model.forward(X["val"])
-            preds_val = logits_val.argmax(dim=1)
-            val_loss = F.cross_entropy(logits_val, Y["val"])
-            val_accuracy = (preds_val == Y["val"]).float().mean().item()
-            print(
-                f"{i}: train loss = {loss.item():4f}, val loss = {val_loss.item():4f}, val accuracy = {val_accuracy * 100:.2f}%"
-            )
+            model.eval()
+            with torch.no_grad():
+                logits_val = model.forward(X["val"])
+                preds_val = logits_val.argmax(dim=1)
+                val_loss = F.cross_entropy(logits_val, Y["val"])
+                val_accuracy = (preds_val == Y["val"]).float().mean().item()
+                print(
+                    f"{i}: train loss = {loss.item():4f}, val loss = {val_loss.item():4f}, val accuracy = {val_accuracy * 100:.2f}%"
+                )
+            model.train()
 
     print(f"Number of parameters: {total_params}")
+    model.eval()
     print(sample_from_model(model, stoi=stoi, input_str=input_str, num_chars=100))
 
 
