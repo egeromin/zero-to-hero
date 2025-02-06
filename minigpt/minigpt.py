@@ -9,7 +9,7 @@ To-do list:
 4. Add self attention to model, with bag of words embedding  ✅
 5. Define multi-head attention and a self attention block that uses it. ✅
 5.5. Remove everything that's not a transformer from the model. ✅
-6. Add positional encodings
+6. Add positional encodings ✅
 7. Add residual connections
 8. Add LayerNorm -> N.B, should come before the multi head attention, unlike in the paper.
 9. Add dropout
@@ -184,7 +184,13 @@ class MiniGPT(torch.nn.Module):
         query_size: int,
     ):
         super().__init__()
+        self.vocab_size = vocab_size
+        self.context_size = context_size
+        self.embedding_size = embedding_size
+        self.query_size = query_size
         self.embedding = nn.Embedding(vocab_size, embedding_size)
+        # Learned positional encoding.
+        self.positional_encoding = nn.Embedding(context_size, embedding_size)
         self.attention_block = AttentionBlock(
             embedding_size=embedding_size,
             query_size=query_size,
@@ -195,8 +201,11 @@ class MiniGPT(torch.nn.Module):
         self.linear = nn.Linear(embedding_size * context_size, vocab_size)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
+        positions = torch.tensor(range(self.context_size), dtype=torch.long)
+        positions_broadcast = torch.ones_like(x) * positions
         emb = self.embedding.forward(x)
-        sa = self.attention_block(emb)
+        pos = self.positional_encoding.forward(positions_broadcast)
+        sa = self.attention_block(emb + pos)
         flat = self.flatten(sa)
         return self.linear(flat)
 
