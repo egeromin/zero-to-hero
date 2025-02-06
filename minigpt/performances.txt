@@ -37,9 +37,15 @@ heve, lle sea piortin Ghon ro y :
 't cen
 
 With residual connections, 10K
-
 10000: train loss = 2.532783, val loss = 2.475182, val accuracy = 31.49%
 Number of parameters: 58625
 y-ky plossos ofa nay t plaplow thot'dsserteswalls ss sorch.;
 Nerwe psofstll nhopsoult:
 I llse nxaol 
+
+With layer norm, 10K
+10000: train loss = 2.501643, val loss = 2.402423, val accuracy = 32.71%
+Number of parameters: 58881
+y-ky padseng ofaan:
+Ce wead fattt thessedteswadlt ws sow fi; weiw  hely.
+

@@ -11,7 +11,7 @@ To-do list:
 5.5. Remove everything that's not a transformer from the model. ✅
 6. Add positional encodings ✅
 7. Add residual connections ✅
-8. Add LayerNorm -> N.B, should come before the multi head attention, unlike in the paper.
+8. Add LayerNorm -> N.B, should come before the multi head attention, unlike in the paper. ✅
 9. Add dropout
 10. Refactor multi head attention to use 4D tensors
 11. Scale up - multiple self attention blocks, increase parameters to what is used in lectures.
@@ -164,17 +164,21 @@ class AttentionBlock(nn.Module):
         self.query_size = query_size
         self.context_size = context_size
         self.num_heads = num_heads
+        self.norm_1 = nn.LayerNorm(embedding_size)
         self.multi_head_attention = MultiHeadAttention(
             embedding_size=embedding_size,
             query_size=query_size,
             context_size=context_size,
             num_heads=num_heads,
         )
+        self.norm_2 = nn.LayerNorm(embedding_size)
         self.linear = nn.Linear(embedding_size, embedding_size)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        multi = self.multi_head_attention(x) + x
-        output = self.linear(multi) + multi
+        norm_1 = self.norm_1(x)
+        multi = self.multi_head_attention(norm_1) + x  # includes residual connection
+        norm_2 = self.norm_2(multi)
+        output = self.linear(norm_2) + multi  # includes residual connection
         assert output.shape == x.shape
         return output
 
