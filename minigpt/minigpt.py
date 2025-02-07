@@ -73,6 +73,25 @@ def load_dataset(
     return {"train": X_train, "val": X_val}, {"train": Y_train, "val": Y_val}, stoi
 
 
+@torch.no_grad()
+def estimate_loss_and_accuracy(model: nn.Module, X: torch.Tensor, Y: torch.Tensor, num_runs: int = 20, batch_size: int = 64) -> tuple[float, float]:
+    losses = []
+    accuracies = []
+    for _ in range(num_runs):
+        perm = torch.randperm(len(X))[:batch_size]
+        X_batch = X[perm]
+        Y_batch = Y[perm]
+        logits = model.forward(X_batch)
+        preds = logits.argmax(dim=1)
+        loss = F.cross_entropy(logits, Y_batch)
+        accuracy = (preds == Y_batch).float().mean().item()
+        losses.append(loss.item())
+        accuracies.append(accuracy)
+    mean_loss = sum(losses) / len(losses)
+    mean_accuracy = sum(accuracies) / len(accuracies)
+    return mean_loss, mean_accuracy
+
+
 class SelfAttention(nn.Module):
     # What I recall from self-attention: each element in the context
     # talks to every other element in the context
@@ -302,14 +321,11 @@ def main():
 
         if i % 500 == 0:
             model.eval()
-            with torch.no_grad():
-                logits_val = model.forward(X["val"])
-                preds_val = logits_val.argmax(dim=1)
-                val_loss = F.cross_entropy(logits_val, Y["val"])
-                val_accuracy = (preds_val == Y["val"]).float().mean().item()
-                print(
-                    f"{i}: train loss = {loss.item():4f}, val loss = {val_loss.item():4f}, val accuracy = {val_accuracy * 100:.2f}%"
-                )
+            train_loss_estimate, _ = estimate_loss_and_accuracy(model, X["train"], Y["train"])
+            val_loss_estimate, val_accuracy_estimate = estimate_loss_and_accuracy(model, X["val"], Y["val"])
+            print(
+                f"{i}: train loss = {train_loss_estimate:4f}, val loss = {val_loss_estimate:4f}, val accuracy = {val_accuracy_estimate * 100:.2f}%"
+            )
             model.train()
 
     print(f"Number of parameters: {total_params}")
