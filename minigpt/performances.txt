@@ -80,3 +80,13 @@ Myrll wott of your!
 
 PETR:
 BY yobehe dor yom I youm eof on
+
+Before refactoring to use 4D self attention
+Number of parameters: 87809
+0: train loss = 3.866119, val loss = 3.894481, val accuracy = 6.33%
+500: train loss = 2.634220, val loss = 2.577343, val accuracy = 30.39%
+1000: train loss = 2.691694, val loss = 2.578048, val accuracy = 29.45%
+Number of parameters: 87809
+Orve mouco tis aili loo for
+:
+Thingimu, munt, yo bemig mivrr-TinitI :
