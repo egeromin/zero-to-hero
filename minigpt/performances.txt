@@ -80,3 +80,20 @@ Myrll wott of your!
 
 PETR:
 BY yobehe dor yom I youm eof on
+
+After fixing self-attention - turns out this WASN'T BEING USED!!!
+Number of parameters: 112769
+0: train loss = 3.980143, val loss = 3.963771, val accuracy = 8.12%
+500: train loss = 2.773277, val loss = 2.757804, val accuracy = 23.67%
+1000: train loss = 2.508579, val loss = 2.460932, val accuracy = 29.69%
+Number of parameters: 112769
+
+And y poake sun tot nhar?
+
+FaRgKSES:
+GLORFETTot,
+TA
+OI
+TSAN I'!
+Hay thee conthe
+ nn The thencon the

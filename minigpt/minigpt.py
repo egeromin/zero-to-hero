@@ -163,14 +163,14 @@ class MultiHeadAttention(nn.Module):
         self.query_size = query_size
         self.context_size = context_size
         self.num_heads = num_heads
-        self.heads = [
+        self.heads = nn.ModuleList([
             SelfAttention(
                 embedding_size=embedding_size,
                 query_size=query_size,
                 context_size=context_size,
             )
             for _ in range(num_heads)
-        ]
+        ])
         self.flatten = nn.Flatten(start_dim=2, end_dim=3)
         self.linear = nn.Linear(embedding_size * num_heads, embedding_size)
 
