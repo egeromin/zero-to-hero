@@ -97,3 +97,14 @@ OI
 TSAN I'!
 Hay thee conthe
  nn The thencon the
+
+10K iterations of the previous
+9500: train loss = 2.499434, val loss = 2.398318, val accuracy = 32.50%
+10000: train loss = 2.462053, val loss = 2.512705, val accuracy = 30.94%
+Number of parameters: 112769
+e, drarelll aafellide af ullb.
+
+BI Thag Ir.
+RD lid: hay, by ur t iov dsy
+vtis ande st de loulose thi
+

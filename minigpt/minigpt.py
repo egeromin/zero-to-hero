@@ -314,7 +314,7 @@ def main():
     model.train()
     total_params = sum(p.numel() for p in model.parameters())
     print(f"Number of parameters: {total_params}")
-    max_training_iterations = 1_001
+    max_training_iterations = 10_001
     batch_size = 32
     opt = AdamW(model.parameters(), lr=0.01)
 
