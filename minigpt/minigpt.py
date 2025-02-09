@@ -24,6 +24,7 @@ To-do list:
 13. Refactor multi head attention to use 4D tensors
 14. Refactor to use flash attention, if available
 """
+
 import math
 from pathlib import Path
 from typing import Mapping
@@ -76,7 +77,13 @@ def load_dataset(
 
 
 @torch.no_grad()
-def estimate_loss_and_accuracy(model: nn.Module, X: torch.Tensor, Y: torch.Tensor, num_runs: int = 20, batch_size: int = 64) -> tuple[float, float]:
+def estimate_loss_and_accuracy(
+    model: nn.Module,
+    X: torch.Tensor,
+    Y: torch.Tensor,
+    num_runs: int = 20,
+    batch_size: int = 64,
+) -> tuple[float, float]:
     losses = []
     accuracies = []
     for _ in range(num_runs):
@@ -327,8 +334,12 @@ def main():
 
         if i % measure_every == 0:
             model.eval()
-            train_loss_estimate, _ = estimate_loss_and_accuracy(model, X["train"], Y["train"])
-            val_loss_estimate, val_accuracy_estimate = estimate_loss_and_accuracy(model, X["val"], Y["val"])
+            train_loss_estimate, _ = estimate_loss_and_accuracy(
+                model, X["train"], Y["train"]
+            )
+            val_loss_estimate, val_accuracy_estimate = estimate_loss_and_accuracy(
+                model, X["val"], Y["val"]
+            )
             train_losses.append(train_loss_estimate)
             validation_losses.append(val_loss_estimate)
             print(
@@ -344,7 +355,7 @@ def main():
     fig, axes = plt.subplots(nrows=2, ncols=1, figsize=(4, 8))
     train_losses_log10 = [math.log10(e) for e in train_losses]
     val_losses_log10 = [math.log10(e) for e in validation_losses]
-    train_iteration = [i*measure_every for i in range(len(train_losses))]
+    train_iteration = [i * measure_every for i in range(len(train_losses))]
     axes[0].plot(train_iteration, train_losses_log10)
     axes[0].set_xlabel("Training iteration")
     axes[0].set_ylabel("Log10 Train loss")
