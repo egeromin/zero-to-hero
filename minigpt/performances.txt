@@ -108,3 +108,20 @@ BI Thag Ir.
 RD lid: hay, by ur t iov dsy
 vtis ande st de loulose thi
 
+4D multi-head-attention, 1K iterations
+0: train loss = 3.858357, val loss = 3.837990, val accuracy = 8.20%
+500: train loss = 2.830274, val loss = 2.829807, val accuracy = 22.11%
+1000: train loss = 2.596923, val loss = 2.567773, val accuracy = 29.84%
+Number of parameters: 112769
+
+And y peake hun on mnele mor Agin w:
+Gey Fot on,
+TomeIl
+SAn me!
+
+
+BO KEeGNOnZHy
+Dun,
+ATh,
+Inn I KO
+

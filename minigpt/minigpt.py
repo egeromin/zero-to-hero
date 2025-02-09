@@ -16,13 +16,13 @@ To-do list:
 9.5 Fix Feedforward to include non-linearity!  ✅
 10. Add plots of training losses, validation losses and activations at specific points in the model.
     In particular, add estimates of train/val loss by calculating the mean cross many mini batches. ✅
-11. Add multiple attention blocks
-11. Scale up - multiple self attention blocks, increase parameters to what is used in lectures.
+11. Refactor multi head attention to use 4D tensors ✅
+    11.5 Use flash attention, if it's available.
+12. Add multiple attention blocks
+13. Scale up - multiple self attention blocks, increase parameters to what is used in lectures.
     Run locally for a few iterations and see how long it takes. Estimate how long it would take
     to run N iterations.
-12. Train N iterations on GPU
-13. Refactor multi head attention to use 4D tensors
-14. Refactor to use flash attention, if available
+14. Train N iterations on GPU
 """
 
 import math
@@ -101,7 +101,7 @@ def estimate_loss_and_accuracy(
     return mean_loss, mean_accuracy
 
 
-class SelfAttention(nn.Module):
+class MultiHeadSelfAttention(nn.Module):
     # What I recall from self-attention: each element in the context
     # talks to every other element in the context
     # batch * context_size * embedding_size
@@ -113,13 +113,21 @@ class SelfAttention(nn.Module):
     # keys, queries, values
     # We learn the keys, queries and values for any embedding vector
 
-    def __init__(self, embedding_size: int, query_size: int, context_size: int):
+    def __init__(
+        self, embedding_size: int, query_size: int, context_size: int, num_heads: int
+    ):
         super().__init__()
         self.embedding_size = embedding_size
         self.query_size = query_size
-        self.keys = nn.Linear(embedding_size, query_size)
-        self.queries = nn.Linear(embedding_size, query_size)
-        self.values = nn.Linear(embedding_size, embedding_size)
+        self.context_size = context_size
+        self.num_heads = num_heads
+        self.keys = nn.Linear(embedding_size, query_size * num_heads)
+        self.queries = nn.Linear(embedding_size, query_size * num_heads)
+        self.values = nn.Linear(embedding_size, embedding_size * num_heads)
+
+        self.flatten = nn.Flatten(start_dim=2, end_dim=3)
+        self.linear = nn.Linear(embedding_size * num_heads, embedding_size)
+
         # self-attention mask
         self.register_buffer(
             "mask",
@@ -129,59 +137,34 @@ class SelfAttention(nn.Module):
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         B, C, E = x.shape
         assert E == self.embedding_size
-        keys = self.keys.forward(x)
-        queries = self.queries.forward(x)
-        assert tuple(keys.shape) == tuple(queries.shape) == (B, C, self.query_size)
+        assert C == self.context_size
+        H = self.num_heads
+        keys = self.keys.forward(x).view(B, C, H, self.query_size).transpose(2, 1)
+        queries = self.queries.forward(x).view(B, C, H, self.query_size).transpose(2, 1)
+        assert tuple(keys.shape) == tuple(queries.shape) == (B, H, C, self.query_size)
 
         # sa == "self attention"
-        sa = queries @ keys.transpose(1, 2)
-        assert tuple(sa.shape) == (B, C, C)
+        sa = queries @ keys.transpose(2, 3)
+        assert tuple(sa.shape) == (B, H, C, C)
 
         # Mask the *upper half* since each query should not interact
         # with keys that come after it in the context.
         masked_sa = torch.where(self.mask, -torch.inf, sa)
-        assert tuple(masked_sa.shape) == (B, C, C)
+        assert tuple(masked_sa.shape) == (B, H, C, C)
         norm_masked_sa = F.softmax(
             masked_sa / torch.sqrt(torch.tensor(self.query_size).float()), dim=2
         )
-        assert tuple(norm_masked_sa.shape) == (B, C, C)
+        assert tuple(norm_masked_sa.shape) == (B, H, C, C)
 
-        values = self.values.forward(x)
-        assert tuple(values.shape) == (B, C, E)
-        outputs = norm_masked_sa @ values
-        return outputs
+        values = self.values.forward(x).reshape(B, C, H, E).transpose(2, 1)
+        assert tuple(values.shape) == (B, H, C, E)
+        after_attention = norm_masked_sa @ values
+        assert tuple(after_attention.shape) == (B, H, C, E)
 
-
-class MultiHeadAttention(nn.Module):
-    # TODO: refactor and use 4-D tensors internally, for efficiency
-
-    def __init__(
-        self, embedding_size: int, query_size: int, context_size: int, num_heads: int
-    ):
-        super().__init__()
-        self.embedding_size = embedding_size
-        self.query_size = query_size
-        self.context_size = context_size
-        self.num_heads = num_heads
-        self.heads = nn.ModuleList([
-            SelfAttention(
-                embedding_size=embedding_size,
-                query_size=query_size,
-                context_size=context_size,
-            )
-            for _ in range(num_heads)
-        ])
-        self.flatten = nn.Flatten(start_dim=2, end_dim=3)
-        self.linear = nn.Linear(embedding_size * num_heads, embedding_size)
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        B, C, E = x.shape
-        assert E == self.embedding_size
-        head_outputs = [head.forward(x) for head in self.heads]
-        stacked = torch.stack(head_outputs, dim=2)
-        assert tuple(stacked.shape) == (B, C, self.num_heads, E)
+        stacked = after_attention.transpose(2, 1)
+        assert tuple(stacked.shape) == (B, C, H, E)
         flat = self.flatten(stacked)
-        assert tuple(flat.shape) == (B, C, self.num_heads * E)
+        assert tuple(flat.shape) == (B, C, H * E)
         output = self.linear(flat)
         assert tuple(output.shape) == (B, C, E)
         return output
@@ -210,7 +193,7 @@ class AttentionBlock(nn.Module):
         self.context_size = context_size
         self.num_heads = num_heads
         self.norm_1 = nn.LayerNorm(embedding_size)
-        self.multi_head_attention = MultiHeadAttention(
+        self.multi_head_attention = MultiHeadSelfAttention(
             embedding_size=embedding_size,
             query_size=query_size,
             context_size=context_size,
@@ -235,6 +218,7 @@ class MiniGPT(torch.nn.Module):
         context_size: int,
         embedding_size: int,
         query_size: int,
+        num_heads: int,
     ):
         super().__init__()
         self.vocab_size = vocab_size
@@ -249,7 +233,7 @@ class MiniGPT(torch.nn.Module):
             embedding_size=embedding_size,
             query_size=query_size,
             context_size=context_size,
-            num_heads=4,
+            num_heads=num_heads,
         )
         self.flatten = nn.Flatten(start_dim=1, end_dim=2)
         self.linear = nn.Linear(embedding_size * context_size, vocab_size)
@@ -310,11 +294,12 @@ def main():
         embedding_size=64,
         context_size=context_size,
         query_size=16,
+        num_heads=4,
     )
     model.train()
     total_params = sum(p.numel() for p in model.parameters())
     print(f"Number of parameters: {total_params}")
-    max_training_iterations = 10_001
+    max_training_iterations = 1_001
     batch_size = 32
     opt = AdamW(model.parameters(), lr=0.01)
 
