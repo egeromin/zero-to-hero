@@ -15,7 +15,8 @@ To-do list:
 9. Add dropout ✅
 9.5 Fix Feedforward to include non-linearity!  ✅
 10. Add plots of training losses, validation losses and activations at specific points in the model.
-    In particular, add estimates of train/val loss by calculating the mean cross many mini batches.
+    In particular, add estimates of train/val loss by calculating the mean cross many mini batches. ✅
+11. Add multiple attention blocks
 11. Scale up - multiple self attention blocks, increase parameters to what is used in lectures.
     Run locally for a few iterations and see how long it takes. Estimate how long it would take
     to run N iterations.
@@ -23,7 +24,7 @@ To-do list:
 13. Refactor multi head attention to use 4D tensors
 14. Refactor to use flash attention, if available
 """
-
+import math
 from pathlib import Path
 from typing import Mapping
 
@@ -31,6 +32,7 @@ import torch
 import torch.nn.functional as F
 from torch import nn
 from torch.optim import AdamW
+from matplotlib import pyplot as plt
 
 
 torch.manual_seed(1337)
@@ -305,9 +307,13 @@ def main():
     model.train()
     total_params = sum(p.numel() for p in model.parameters())
     print(f"Number of parameters: {total_params}")
-    max_training_iterations = 10_001
+    max_training_iterations = 1_001
     batch_size = 32
     opt = AdamW(model.parameters(), lr=0.01)
+
+    train_losses = []
+    validation_losses = []
+    measure_every = 500
 
     for i in range(max_training_iterations):
         perm = torch.randperm(len(X["train"]))[:batch_size]
@@ -319,10 +325,12 @@ def main():
         loss.backward()
         opt.step()
 
-        if i % 500 == 0:
+        if i % measure_every == 0:
             model.eval()
             train_loss_estimate, _ = estimate_loss_and_accuracy(model, X["train"], Y["train"])
             val_loss_estimate, val_accuracy_estimate = estimate_loss_and_accuracy(model, X["val"], Y["val"])
+            train_losses.append(train_loss_estimate)
+            validation_losses.append(val_loss_estimate)
             print(
                 f"{i}: train loss = {train_loss_estimate:4f}, val loss = {val_loss_estimate:4f}, val accuracy = {val_accuracy_estimate * 100:.2f}%"
             )
@@ -331,6 +339,22 @@ def main():
     print(f"Number of parameters: {total_params}")
     model.eval()
     print(sample_from_model(model, stoi=stoi, input_str=input_str, num_chars=100))
+
+    # Plot training and validation losses
+    fig, axes = plt.subplots(nrows=2, ncols=1, figsize=(4, 8))
+    train_losses_log10 = [math.log10(e) for e in train_losses]
+    val_losses_log10 = [math.log10(e) for e in validation_losses]
+    train_iteration = [i*measure_every for i in range(len(train_losses))]
+    axes[0].plot(train_iteration, train_losses_log10)
+    axes[0].set_xlabel("Training iteration")
+    axes[0].set_ylabel("Log10 Train loss")
+    axes[0].set_title("Log10 training losses during the training")
+    axes[1].plot(train_iteration, val_losses_log10)
+    axes[1].set_xlabel("Training iteration")
+    axes[1].set_ylabel("Log10 Validation loss")
+    axes[1].set_title("Log10 validation losses during the training")
+    plt.tight_layout()
+    plt.show()
 
 
 if __name__ == "__main__":
