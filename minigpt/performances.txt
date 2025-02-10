@@ -125,3 +125,8 @@ Dun,
 ATh,
 Inn I KO
 
+Using flash attention, 1K iterations
+0: train loss = 3.962020, val loss = 3.948527, val accuracy = 8.20%
+500: train loss = 2.756977, val loss = 2.736682, val accuracy = 22.81%
+1000: train loss = 2.527491, val loss = 2.490646, val accuracy = 30.63%
+Number of parameters: 112769

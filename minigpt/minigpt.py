@@ -17,7 +17,7 @@ To-do list:
 10. Add plots of training losses, validation losses and activations at specific points in the model.
     In particular, add estimates of train/val loss by calculating the mean cross many mini batches. ✅
 11. Refactor multi head attention to use 4D tensors ✅
-    11.5 Use flash attention, if it's available. TODO: shouldn't I be getting exactly the same results as with slow attention?
+    11.5 Use flash attention, if it's available. ✅
 12. Add multiple attention blocks
 13. Scale up - multiple self attention blocks, increase parameters to what is used in lectures.
     Run locally for a few iterations and see how long it takes. Estimate how long it would take
@@ -165,9 +165,8 @@ class MultiHeadSelfAttention(nn.Module):
             # with keys that come after it in the context.
             masked_sa = torch.where(self.mask, -torch.inf, sa)
             assert tuple(masked_sa.shape) == (B, H, C, C)
-            norm_masked_sa = F.softmax(
-                masked_sa / torch.sqrt(torch.tensor(self.query_size).float()), dim=2
-            )
+            scale_factor = 1 / self.query_size**0.5
+            norm_masked_sa = F.softmax(masked_sa * scale_factor, dim=3)
             assert tuple(norm_masked_sa.shape) == (B, H, C, C)
 
             after_attention = norm_masked_sa @ values
