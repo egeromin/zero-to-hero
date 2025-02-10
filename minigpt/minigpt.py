@@ -18,7 +18,7 @@ To-do list:
     In particular, add estimates of train/val loss by calculating the mean cross many mini batches. ✅
 11. Refactor multi head attention to use 4D tensors ✅
     11.5 Use flash attention, if it's available. ✅
-12. Add multiple attention blocks
+12. Add multiple attention blocks ✅
 13. Scale up - multiple self attention blocks, increase parameters to what is used in lectures.
     Run locally for a few iterations and see how long it takes. Estimate how long it would take
     to run N iterations.
@@ -237,6 +237,7 @@ class MiniGPT(torch.nn.Module):
         embedding_size: int,
         query_size: int,
         num_heads: int,
+        num_blocks: int,
         use_flash_attention: bool = False,
     ):
         super().__init__()
@@ -248,12 +249,17 @@ class MiniGPT(torch.nn.Module):
         # Learned positional encoding.
         self.positional_encoding = nn.Embedding(context_size, embedding_size)
         self.dropout = nn.Dropout(p=DROPOUT)
-        self.attention_block = AttentionBlock(
-            embedding_size=embedding_size,
-            query_size=query_size,
-            context_size=context_size,
-            num_heads=num_heads,
-            use_flash_attention=use_flash_attention,
+        self.attention_blocks = nn.Sequential(
+            *[
+                AttentionBlock(
+                    embedding_size=embedding_size,
+                    query_size=query_size,
+                    context_size=context_size,
+                    num_heads=num_heads,
+                    use_flash_attention=use_flash_attention,
+                )
+                for _ in range(num_blocks)
+            ]
         )
         self.flatten = nn.Flatten(start_dim=1, end_dim=2)
         self.linear = nn.Linear(embedding_size * context_size, vocab_size)
@@ -274,7 +280,7 @@ class MiniGPT(torch.nn.Module):
         emb = self.embedding.forward(x)
         pos = self.positional_encoding.forward(positions_broadcast)
         drop = self.dropout(emb + pos)
-        sa = self.attention_block(drop)
+        sa = self.attention_blocks(drop)
         flat = self.flatten(sa)
         return self.linear(flat)
 
@@ -315,6 +321,7 @@ def main():
         context_size=context_size,
         query_size=16,
         num_heads=4,
+        num_blocks=6,
         use_flash_attention=True,
     )
     model.train()
