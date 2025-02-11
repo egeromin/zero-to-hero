@@ -286,29 +286,29 @@ class MiniGPT(torch.nn.Module):
 
 
 def sample_from_model(
-    model: MiniGPT, input_str: str, stoi: Mapping[str, int], num_chars: int
+    model: MiniGPT, context_size: int, stoi: Mapping[str, int], num_chars: int
 ) -> str:
     itos = {i: s for s, i in stoi.items()}
-    next_ctx = None
+    current_ctx = None
     generated_chars = []
     for _sample in range(num_chars):
-        current_ctx = next_ctx or input_str
-        input = torch.tensor([[stoi[c] for c in current_ctx]], dtype=torch.long)
+        if current_ctx is not None:
+            input = torch.tensor([[stoi[c] for c in current_ctx]], dtype=torch.long)
+        else:
+            input = torch.zeros(1, context_size, dtype=torch.long)
         logits = model.forward(input)
         probs = F.softmax(logits, dim=1)
         sample = torch.multinomial(probs, num_samples=1)
         next_char = itos[sample.item()]
         generated_chars.append(next_char)
-        next_ctx = current_ctx[1:] + next_char
+        current_ctx = current_ctx[1:] + next_char
 
     return "".join(generated_chars)
 
 
 def main():
     print("Loading dataset...")
-    context_size = 8
-    input_str = "Consider"
-    assert len(input_str) == context_size
+    context_size = 256
     X, Y, stoi = load_dataset(context_size=context_size)
     print(
         f"Done loading dataset. Train size = {len(X['train'])}, val size = {len(X['val'])}"
@@ -317,23 +317,23 @@ def main():
     vocab_size = len(stoi)
     model = MiniGPT(
         vocab_size=vocab_size,
-        embedding_size=64,
+        embedding_size=384,
         context_size=context_size,
-        query_size=16,
-        num_heads=4,
+        query_size=384 // 6,
+        num_heads=6,
         num_blocks=6,
         use_flash_attention=True,
     )
     model.train()
     total_params = sum(p.numel() for p in model.parameters())
-    print(f"Number of parameters: {total_params}")
-    max_training_iterations = 1_001
-    batch_size = 32
-    opt = AdamW(model.parameters(), lr=0.01)
+    print(f"Number of parameters: {total_params // 1e6}M parameters")
+    max_training_iterations = 5_001
+    batch_size = 64
+    opt = AdamW(model.parameters(), lr=3e-4)
 
     train_losses = []
     validation_losses = []
-    measure_every = 500
+    measure_every = 10
 
     for i in range(max_training_iterations):
         perm = torch.randperm(len(X["train"]))[:batch_size]
@@ -360,9 +360,9 @@ def main():
             )
             model.train()
 
-    print(f"Number of parameters: {total_params}")
+    print(f"Number of parameters: {total_params // 1e6}M parameters")
     model.eval()
-    print(sample_from_model(model, stoi=stoi, input_str=input_str, num_chars=100))
+    print(sample_from_model(model, stoi=stoi, context_size=context_size, num_chars=100))
 
     # Plot training and validation losses
     fig, axes = plt.subplots(nrows=2, ncols=1, figsize=(4, 8))
