@@ -21,24 +21,20 @@ To-do list:
 12. Add multiple attention blocks ✅
 13. Scale up - multiple self attention blocks, increase parameters to what is used in lectures.
     Run locally for a few iterations and see how long it takes. Estimate how long it would take
-    to run N iterations.
+    to run N iterations. ✅
 14. Train N iterations on GPU
 """
 
-import logging
 import math
-import time
 from pathlib import Path
 from typing import Mapping
 
 import torch
 import torch.nn.functional as F
+from matplotlib import pyplot as plt
 from torch import nn
 from torch.optim import AdamW
-from matplotlib import pyplot as plt
 
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
 torch.manual_seed(1337)
 DROPOUT = 0.2
 device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -227,11 +223,8 @@ class AttentionBlock(nn.Module):
         self.drop_2 = nn.Dropout(p=DROPOUT)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        logger.info("Attention block: start")
         multi = self.drop_1(self.multi_head_attention(self.norm_1(x))) + x
-        logger.info("Attention block: done multi head attention")
         output = self.drop_2(self.feed_forward(self.norm_2(multi))) + multi
-        logger.info("Attention block: done feed forward")
         assert output.shape == x.shape
         return output
 
@@ -284,14 +277,10 @@ class MiniGPT(torch.nn.Module):
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         positions = torch.tensor(range(self.context_size), dtype=torch.long)
         positions_broadcast = torch.ones_like(x) * positions
-        logger.info(f"Start forward: X.shape = {tuple(x.shape)}")
         emb = self.embedding.forward(x)
-        logger.info("Done embedding")
         pos = self.positional_encoding.forward(positions_broadcast)
-        logger.info("Done positional encoding")
         drop = self.dropout(emb + pos)
         sa = self.attention_blocks(drop)
-        logger.info("Done attention blocks")
         flat = self.flatten(sa)
         return self.linear(flat)
 
@@ -351,20 +340,10 @@ def main():
         X_batch = X["train"][perm]
         Y_batch = Y["train"][perm]
         opt.zero_grad()
-        start = time.time()
-        logger.info("Start forward")
         logits = model.forward(X_batch)
-        logger.info("End forward")
         loss = F.cross_entropy(logits, Y_batch)
-        logger.info("Done loss")
-        end = time.time()
-        logger.info("Time taken for one forward + loss: {:.2f}s".format(end - start))
         loss.backward()
-        logger.info("Done backward")
         opt.step()
-        logger.info("Done updating parameters")
-        end = time.time()
-        logger.info("Time taken for one iteration: {:.2f}s".format(end - start))
 
         if i % measure_every == 0:
             model.eval()
