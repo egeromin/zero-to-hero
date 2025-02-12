@@ -25,6 +25,7 @@ To-do list:
 14. Train N iterations on GPU
 """
 
+import logging
 import math
 from pathlib import Path
 from typing import Mapping
@@ -35,7 +36,8 @@ from torch import nn
 from torch.optim import AdamW
 from matplotlib import pyplot as plt
 
-
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 torch.manual_seed(1337)
 DROPOUT = 0.2
 
@@ -223,8 +225,11 @@ class AttentionBlock(nn.Module):
         self.drop_2 = nn.Dropout(p=DROPOUT)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
+        logger.info("Attention block: start")
         multi = self.drop_1(self.multi_head_attention(self.norm_1(x))) + x
+        logger.info("Attention block: done multi head attention")
         output = self.drop_2(self.feed_forward(self.norm_2(multi))) + multi
+        logger.info("Attention block: done feed forward")
         assert output.shape == x.shape
         return output
 
@@ -277,10 +282,14 @@ class MiniGPT(torch.nn.Module):
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         positions = torch.tensor(range(self.context_size), dtype=torch.long)
         positions_broadcast = torch.ones_like(x) * positions
+        logger.info("Start forward")
         emb = self.embedding.forward(x)
+        logger.info("Done embedding")
         pos = self.positional_encoding.forward(positions_broadcast)
+        logger.info("Done positional encoding")
         drop = self.dropout(emb + pos)
         sa = self.attention_blocks(drop)
+        logger.info("Done attention blocks")
         flat = self.flatten(sa)
         return self.linear(flat)
 
@@ -340,10 +349,15 @@ def main():
         X_batch = X["train"][perm]
         Y_batch = Y["train"][perm]
         opt.zero_grad()
+        logger.info("Start forward")
         logits = model.forward(X_batch)
+        logger.info("End forward")
         loss = F.cross_entropy(logits, Y_batch)
+        logger.info("Done loss")
         loss.backward()
+        logger.info("Done backward")
         opt.step()
+        logger.info("Done updating parameters")
 
         if i % measure_every == 0:
             model.eval()
