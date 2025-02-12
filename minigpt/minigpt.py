@@ -38,6 +38,7 @@ from torch.optim import AdamW
 
 torch.manual_seed(1337)
 DROPOUT = 0.2
+device = "cuda" if torch.cuda.is_available() else "cpu"
 
 
 def load_dataset(
@@ -67,6 +68,11 @@ def load_dataset(
     perm = torch.randperm(len(X))
     X = X[perm]
     Y = Y[perm]
+
+    # Move the inputs and labels to GPU.
+    # For tensors, .to(device) returns a copy on the desired device.
+    X, Y = X.to(device), Y.to(device)
+
     split = int(len(X) * 0.8)
     X_train = X[:split]
     Y_train = Y[:split]
@@ -263,6 +269,9 @@ class MiniGPT(torch.nn.Module):
         )
         self.flatten = nn.Flatten(start_dim=1, end_dim=2)
         self.linear = nn.Linear(embedding_size * context_size, vocab_size)
+        self.register_buffer(
+            "positions", torch.tensor(range(self.context_size), dtype=torch.long)
+        )
         self.apply(self._init_weights)
 
     @staticmethod
@@ -275,10 +284,8 @@ class MiniGPT(torch.nn.Module):
             nn.init.normal_(module.weight, mean=0.0, std=0.02)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        positions = torch.tensor(range(self.context_size), dtype=torch.long)
-        positions_broadcast = torch.ones_like(x) * positions
         emb = self.embedding.forward(x)
-        pos = self.positional_encoding.forward(positions_broadcast)
+        pos = self.positional_encoding.forward(self.positions)
         drop = self.dropout(emb + pos)
         sa = self.attention_blocks(drop)
         flat = self.flatten(sa)
@@ -293,9 +300,11 @@ def sample_from_model(
     generated_chars = []
     for _sample in range(num_chars):
         if current_ctx is not None:
-            input = torch.tensor([[stoi[c] for c in current_ctx]], dtype=torch.long)
+            input = torch.tensor([[stoi[c] for c in current_ctx]], dtype=torch.long).to(
+                device
+            )
         else:
-            input = torch.zeros(1, context_size, dtype=torch.long)
+            input = torch.zeros(1, context_size, dtype=torch.long).to(device)
         logits = model.forward(input)
         probs = F.softmax(logits, dim=1)
         sample = torch.multinomial(probs, num_samples=1)
@@ -324,6 +333,8 @@ def main():
         num_blocks=6,
         use_flash_attention=True,
     )
+    # Move the model to GPU. For nn.Module, .to(device) modifies in-place
+    model.to(device)
     model.train()
     total_params = sum(p.numel() for p in model.parameters())
     print(f"Number of parameters: {total_params // 1e6}M parameters")
@@ -364,7 +375,9 @@ def main():
 
     print(f"Number of parameters: {total_params // 1e6}M parameters")
     model.eval()
-    print(sample_from_model(model, stoi=stoi, context_size=context_size, num_chars=100))
+    print(
+        sample_from_model(model, stoi=stoi, context_size=context_size, num_chars=2000)
+    )
 
     # Plot training and validation losses
     fig, axes = plt.subplots(nrows=2, ncols=1, figsize=(4, 8))
