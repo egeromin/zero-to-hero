@@ -130,3 +130,10 @@ Using flash attention, 1K iterations
 500: train loss = 2.756977, val loss = 2.736682, val accuracy = 22.81%
 1000: train loss = 2.527491, val loss = 2.490646, val accuracy = 30.63%
 Number of parameters: 112769
+
+
+26M param model: to do a single step, requires 15.21 seconds, let's say 15
+seconds. So, lower bound on 5K training iterations = 15*5K = 75K seconds >
+20hours. Since forward pass takes 6.66s, let's say 6s, and each evaluation does
+20 of those, we add an additional 120 seconds 5K/500 times, so an additional
+1200 seconds just for evaluation. Not coooool.

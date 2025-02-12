@@ -27,6 +27,7 @@ To-do list:
 
 import logging
 import math
+import time
 from pathlib import Path
 from typing import Mapping
 
@@ -40,6 +41,7 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 torch.manual_seed(1337)
 DROPOUT = 0.2
+device = "cuda" if torch.cuda.is_available() else "cpu"
 
 
 def load_dataset(
@@ -282,7 +284,7 @@ class MiniGPT(torch.nn.Module):
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         positions = torch.tensor(range(self.context_size), dtype=torch.long)
         positions_broadcast = torch.ones_like(x) * positions
-        logger.info("Start forward")
+        logger.info(f"Start forward: X.shape = {tuple(x.shape)}")
         emb = self.embedding.forward(x)
         logger.info("Done embedding")
         pos = self.positional_encoding.forward(positions_broadcast)
@@ -349,15 +351,20 @@ def main():
         X_batch = X["train"][perm]
         Y_batch = Y["train"][perm]
         opt.zero_grad()
+        start = time.time()
         logger.info("Start forward")
         logits = model.forward(X_batch)
         logger.info("End forward")
         loss = F.cross_entropy(logits, Y_batch)
         logger.info("Done loss")
+        end = time.time()
+        logger.info("Time taken for one forward + loss: {:.2f}s".format(end - start))
         loss.backward()
         logger.info("Done backward")
         opt.step()
         logger.info("Done updating parameters")
+        end = time.time()
+        logger.info("Time taken for one iteration: {:.2f}s".format(end - start))
 
         if i % measure_every == 0:
             model.eval()
