@@ -31,13 +31,13 @@ from typing import Mapping
 
 import torch
 import torch.nn.functional as F
+import tqdm
 from matplotlib import pyplot as plt
 from torch import nn
 from torch.optim import AdamW
 
 torch.manual_seed(1337)
 DROPOUT = 0.2
-device = "cuda" if torch.cuda.is_available() else "cpu"
 
 
 def load_dataset(
@@ -335,7 +335,7 @@ def main():
     validation_losses = []
     measure_every = 10
 
-    for i in range(max_training_iterations):
+    for i in tqdm.tqdm(range(max_training_iterations)):
         perm = torch.randperm(len(X["train"]))[:batch_size]
         X_batch = X["train"][perm]
         Y_batch = Y["train"][perm]
@@ -356,7 +356,9 @@ def main():
             train_losses.append(train_loss_estimate)
             validation_losses.append(val_loss_estimate)
             print(
-                f"{i}: train loss = {train_loss_estimate:4f}, val loss = {val_loss_estimate:4f}, val accuracy = {val_accuracy_estimate * 100:.2f}%"
+                f"\n{i}: train loss = {train_loss_estimate:4f}, "
+                f"val loss = {val_loss_estimate:4f}, "
+                f"val accuracy = {val_accuracy_estimate * 100:.2f}%"
             )
             model.train()
 
