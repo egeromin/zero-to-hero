@@ -25,6 +25,7 @@ To-do list:
 14. Train N iterations on GPU
 """
 
+import json
 import math
 import sys
 from pathlib import Path
@@ -58,16 +59,27 @@ def load_dataset(
         Y: output labels
         stoi: mapping of str to int
     """
-    corpus = Path("tinyshakespeare.txt").read_text()
-    stoi = {c: i for i, c in enumerate(sorted(set(corpus)))}
-    num_training_samples = len(corpus) - context_size
-    X = torch.zeros((num_training_samples, context_size), dtype=torch.long)
-    Y = torch.zeros(num_training_samples, dtype=torch.long)
-    for i in range(num_training_samples):
-        input_ctx = corpus[i : i + context_size]
-        output_c = corpus[i + context_size]
-        X[i, :] = torch.tensor([stoi[c] for c in input_ctx], dtype=torch.long)
-        Y[i] = stoi[output_c]
+    if not Path("train_x.pt").exists():
+        corpus = Path("tinyshakespeare.txt").read_text()
+        stoi = {c: i for i, c in enumerate(sorted(set(corpus)))}
+        num_training_samples = len(corpus) - context_size
+        X = torch.zeros((num_training_samples, context_size), dtype=torch.long)
+        Y = torch.zeros(num_training_samples, dtype=torch.long)
+        for i in range(num_training_samples):
+            input_ctx = corpus[i : i + context_size]
+            output_c = corpus[i + context_size]
+            X[i, :] = torch.tensor([stoi[c] for c in input_ctx], dtype=torch.long)
+            Y[i] = stoi[output_c]
+
+        print("Saving processed dataset to cache")
+        torch.save(X, "train_x.pt")
+        torch.save(Y, "train_y.pt")
+        Path("stoi.json").write_text(json.dumps(stoi, indent=2))
+    else:
+        print("Loading cached dataset.")
+        stoi = Path("stoi.json").read_text()
+        X = torch.load("train_x.pt")
+        Y = torch.load("train_y.pt")
 
     # Shuffle input data and get train/val split
     perm = torch.randperm(len(X))
