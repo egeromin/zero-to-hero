@@ -359,7 +359,7 @@ def main():
     total_params = sum(p.numel() for p in model.parameters())
     print(f"Number of parameters: {total_params // 1e6}M parameters")
     max_training_iterations = 7_001
-    batch_size = 16
+    batch_size = 8
     opt = AdamW(model.parameters(), lr=3e-4)
 
     train_losses = []
