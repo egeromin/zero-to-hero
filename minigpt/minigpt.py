@@ -26,12 +26,14 @@ To-do list:
 """
 
 import math
+import sys
 from pathlib import Path
 from typing import Mapping
 
 import torch
 import torch.nn.functional as F
 import tqdm
+import matplotlib
 from matplotlib import pyplot as plt
 from torch import nn
 from torch.optim import AdamW
@@ -39,6 +41,9 @@ from torch.optim import AdamW
 torch.manual_seed(1337)
 DROPOUT = 0.2
 device = "cuda" if torch.cuda.is_available() else "cpu"
+if device == "cuda":
+    print(f"Using {device}, matplotlib in Agg mode")
+    matplotlib.use("Agg")
 
 
 def load_dataset(
@@ -296,15 +301,12 @@ def sample_from_model(
     model: MiniGPT, context_size: int, stoi: Mapping[str, int], num_chars: int
 ) -> str:
     itos = {i: s for s, i in stoi.items()}
-    current_ctx = None
+    current_ctx = "".join([itos[0] for _ in range(context_size)])
     generated_chars = []
     for _sample in range(num_chars):
-        if current_ctx is not None:
-            input = torch.tensor([[stoi[c] for c in current_ctx]], dtype=torch.long).to(
-                device
-            )
-        else:
-            input = torch.zeros(1, context_size, dtype=torch.long).to(device)
+        input = torch.tensor([[stoi[c] for c in current_ctx]], dtype=torch.long).to(
+            device
+        )
         logits = model.forward(input)
         probs = F.softmax(logits, dim=1)
         sample = torch.multinomial(probs, num_samples=1)
@@ -316,6 +318,11 @@ def sample_from_model(
 
 
 def main():
+    if len(sys.argv) > 1 and sys.argv[1] == "require-cuda":
+        if device != "cuda":
+            print("Cuda not available on current system. Aborting")
+            sys.exit(1)
+    print(f"Device: {device}")
     print("Loading dataset...")
     context_size = 256
     X, Y, stoi = load_dataset(context_size=context_size)
@@ -375,9 +382,11 @@ def main():
 
     print(f"Number of parameters: {total_params // 1e6}M parameters")
     model.eval()
-    print(
-        sample_from_model(model, stoi=stoi, context_size=context_size, num_chars=2000)
+    sample = sample_from_model(
+        model, stoi=stoi, context_size=context_size, num_chars=2000
     )
+    print(sample)
+    Path("generated-sample.txt").write_text(sample)
 
     # Plot training and validation losses
     fig, axes = plt.subplots(nrows=2, ncols=1, figsize=(4, 8))
@@ -393,7 +402,11 @@ def main():
     axes[1].set_ylabel("Log10 Validation loss")
     axes[1].set_title("Log10 validation losses during the training")
     plt.tight_layout()
-    plt.show()
+
+    if device != "cuda":
+        plt.show()
+    else:
+        plt.savefig("training-plots.png", dpi=300)
 
 
 if __name__ == "__main__":
