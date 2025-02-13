@@ -351,7 +351,7 @@ def main():
 
     train_losses = []
     validation_losses = []
-    measure_every = 10
+    measure_every = 500
 
     for i in tqdm.tqdm(range(max_training_iterations)):
         perm = torch.randperm(len(X["train"]))[:batch_size]
