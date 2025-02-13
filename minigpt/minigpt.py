@@ -336,7 +336,7 @@ def main():
             sys.exit(1)
     print(f"Device: {device}")
     print("Loading dataset...")
-    context_size = 1024
+    context_size = 256
     X, Y, stoi = load_dataset(context_size=context_size)
     print(
         f"Done loading dataset. Train size = {len(X['train'])}, val size = {len(X['val'])}"
@@ -346,11 +346,11 @@ def main():
     print(f"Vocab size = {vocab_size}")
     model = MiniGPT(
         vocab_size=vocab_size,
-        embedding_size=768,
+        embedding_size=384,
         context_size=context_size,
-        query_size=768 // 12,
-        num_heads=12,
-        num_blocks=12,
+        query_size=384 // 6,
+        num_heads=6,
+        num_blocks=6,
         use_flash_attention=True,
     )
     # Move the model to GPU. For nn.Module, .to(device) modifies in-place
@@ -358,8 +358,8 @@ def main():
     model.train()
     total_params = sum(p.numel() for p in model.parameters())
     print(f"Number of parameters: {total_params // 1e6}M parameters")
-    max_training_iterations = 7_001
-    batch_size = 8
+    max_training_iterations = 8_001
+    batch_size = 64
     opt = AdamW(model.parameters(), lr=3e-4)
 
     train_losses = []
