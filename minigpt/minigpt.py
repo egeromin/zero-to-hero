@@ -77,7 +77,7 @@ def load_dataset(
         Path("stoi.json").write_text(json.dumps(stoi, indent=2))
     else:
         print("Loading cached dataset.")
-        stoi = Path("stoi.json").read_text()
+        stoi = json.loads(Path("stoi.json").read_text())
         X = torch.load("train_x.pt")
         Y = torch.load("train_y.pt")
 
