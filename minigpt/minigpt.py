@@ -172,8 +172,8 @@ class MultiHeadSelfAttention(nn.Module):
         queries = self.queries.forward(x).view(B, C, H, self.head_size).transpose(2, 1)
         assert tuple(keys.shape) == tuple(queries.shape) == (B, H, C, self.head_size)
 
-        values = self.values.forward(x).reshape(B, C, H, E).transpose(2, 1)
-        assert tuple(values.shape) == (B, H, C, E)
+        values = self.values.forward(x).reshape(B, C, H, self.head_size).transpose(2, 1)
+        assert tuple(values.shape) == (B, H, C, self.head_size)
 
         if self.use_flash_attention:
             after_attention = F.scaled_dot_product_attention(
@@ -194,12 +194,12 @@ class MultiHeadSelfAttention(nn.Module):
 
             after_attention = norm_masked_sa @ values
 
-        assert tuple(after_attention.shape) == (B, H, C, E)
+        assert tuple(after_attention.shape) == (B, H, C, self.head_size)
 
         stacked = after_attention.transpose(2, 1).contiguous()
-        assert tuple(stacked.shape) == (B, C, H, E)
+        assert tuple(stacked.shape) == (B, C, H, self.head_size)
         flat = self.flatten(stacked)
-        assert tuple(flat.shape) == (B, C, H * E)
+        assert tuple(flat.shape) == (B, C, H * self.head_size)
         output = self.linear(flat)
         assert tuple(output.shape) == (B, C, E)
         return output
