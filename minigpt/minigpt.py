@@ -139,23 +139,23 @@ class MultiHeadSelfAttention(nn.Module):
     def __init__(
         self,
         embedding_size: int,
-        query_size: int,
+        head_size: int,
         context_size: int,
         num_heads: int,
         use_flash_attention: bool = False,
     ):
         super().__init__()
         self.embedding_size = embedding_size
-        self.query_size = query_size
+        self.head_size = head_size
         self.context_size = context_size
         self.num_heads = num_heads
-        self.keys = nn.Linear(embedding_size, query_size * num_heads, bias=False)
-        self.queries = nn.Linear(embedding_size, query_size * num_heads, bias=False)
-        self.values = nn.Linear(embedding_size, query_size * num_heads, bias=False)
+        self.keys = nn.Linear(embedding_size, head_size * num_heads, bias=False)
+        self.queries = nn.Linear(embedding_size, head_size * num_heads, bias=False)
+        self.values = nn.Linear(embedding_size, head_size * num_heads, bias=False)
         self.use_flash_attention = use_flash_attention
 
         self.flatten = nn.Flatten(start_dim=2, end_dim=3)
-        self.linear = nn.Linear(query_size * num_heads, embedding_size, bias=False)
+        self.linear = nn.Linear(head_size * num_heads, embedding_size, bias=False)
 
         # self-attention mask
         self.register_buffer(
@@ -168,9 +168,9 @@ class MultiHeadSelfAttention(nn.Module):
         assert E == self.embedding_size
         assert C == self.context_size
         H = self.num_heads
-        keys = self.keys.forward(x).view(B, C, H, self.query_size).transpose(2, 1)
-        queries = self.queries.forward(x).view(B, C, H, self.query_size).transpose(2, 1)
-        assert tuple(keys.shape) == tuple(queries.shape) == (B, H, C, self.query_size)
+        keys = self.keys.forward(x).view(B, C, H, self.head_size).transpose(2, 1)
+        queries = self.queries.forward(x).view(B, C, H, self.head_size).transpose(2, 1)
+        assert tuple(keys.shape) == tuple(queries.shape) == (B, H, C, self.head_size)
 
         values = self.values.forward(x).reshape(B, C, H, E).transpose(2, 1)
         assert tuple(values.shape) == (B, H, C, E)
@@ -188,7 +188,7 @@ class MultiHeadSelfAttention(nn.Module):
             # with keys that come after it in the context.
             masked_sa = torch.where(self.mask, -torch.inf, sa)
             assert tuple(masked_sa.shape) == (B, H, C, C)
-            scale_factor = 1 / self.query_size**0.5
+            scale_factor = 1 / self.head_size**0.5
             norm_masked_sa = F.softmax(masked_sa * scale_factor, dim=3)
             assert tuple(norm_masked_sa.shape) == (B, H, C, C)
 
@@ -222,20 +222,20 @@ class AttentionBlock(nn.Module):
     def __init__(
         self,
         embedding_size: int,
-        query_size: int,
+        head_size: int,
         context_size: int,
         num_heads: int,
         use_flash_attention: bool = False,
     ):
         super().__init__()
         self.embedding_size = embedding_size
-        self.query_size = query_size
+        self.head_size = head_size
         self.context_size = context_size
         self.num_heads = num_heads
         self.norm_1 = nn.LayerNorm(embedding_size)
         self.multi_head_attention = MultiHeadSelfAttention(
             embedding_size=embedding_size,
-            query_size=query_size,
+            head_size=head_size,
             context_size=context_size,
             num_heads=num_heads,
             use_flash_attention=use_flash_attention,
@@ -258,7 +258,7 @@ class MiniGPT(torch.nn.Module):
         vocab_size: int,
         context_size: int,
         embedding_size: int,
-        query_size: int,
+        head_size: int,
         num_heads: int,
         num_blocks: int,
         use_flash_attention: bool = False,
@@ -267,7 +267,7 @@ class MiniGPT(torch.nn.Module):
         self.vocab_size = vocab_size
         self.context_size = context_size
         self.embedding_size = embedding_size
-        self.query_size = query_size
+        self.head_size = head_size
         self.embedding = nn.Embedding(vocab_size, embedding_size)
         # Learned positional encoding.
         self.positional_encoding = nn.Embedding(context_size, embedding_size)
@@ -276,7 +276,7 @@ class MiniGPT(torch.nn.Module):
             *[
                 AttentionBlock(
                     embedding_size=embedding_size,
-                    query_size=query_size,
+                    head_size=head_size,
                     context_size=context_size,
                     num_heads=num_heads,
                     use_flash_attention=use_flash_attention,
@@ -348,7 +348,7 @@ def main():
         vocab_size=vocab_size,
         embedding_size=384,
         context_size=context_size,
-        query_size=384 // 6,
+        head_size=384 // 6,
         num_heads=6,
         num_blocks=6,
         use_flash_attention=True,
