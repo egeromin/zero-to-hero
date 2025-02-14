@@ -151,11 +151,11 @@ class MultiHeadSelfAttention(nn.Module):
         self.num_heads = num_heads
         self.keys = nn.Linear(embedding_size, query_size * num_heads, bias=False)
         self.queries = nn.Linear(embedding_size, query_size * num_heads, bias=False)
-        self.values = nn.Linear(embedding_size, embedding_size * num_heads, bias=False)
+        self.values = nn.Linear(embedding_size, query_size * num_heads, bias=False)
         self.use_flash_attention = use_flash_attention
 
         self.flatten = nn.Flatten(start_dim=2, end_dim=3)
-        self.linear = nn.Linear(embedding_size * num_heads, embedding_size)
+        self.linear = nn.Linear(query_size * num_heads, embedding_size, bias=False)
 
         # self-attention mask
         self.register_buffer(
@@ -396,9 +396,9 @@ def main():
     print(f"Number of parameters: {total_params // 1e6}M parameters")
     model.eval()
     sample = sample_from_model(
-        model, stoi=stoi, context_size=context_size, num_chars=2000
+        model, stoi=stoi, context_size=context_size, num_chars=10000
     )
-    print(sample)
+    print(sample[:1000])
     Path("generated-sample.txt").write_text(sample)
 
     # Plot training and validation losses
