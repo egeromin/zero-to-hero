@@ -149,9 +149,9 @@ class MultiHeadSelfAttention(nn.Module):
         self.query_size = query_size
         self.context_size = context_size
         self.num_heads = num_heads
-        self.keys = nn.Linear(embedding_size, query_size * num_heads)
-        self.queries = nn.Linear(embedding_size, query_size * num_heads)
-        self.values = nn.Linear(embedding_size, embedding_size * num_heads)
+        self.keys = nn.Linear(embedding_size, query_size * num_heads, bias=False)
+        self.queries = nn.Linear(embedding_size, query_size * num_heads, bias=False)
+        self.values = nn.Linear(embedding_size, embedding_size * num_heads, bias=False)
         self.use_flash_attention = use_flash_attention
 
         self.flatten = nn.Flatten(start_dim=2, end_dim=3)
