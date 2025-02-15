@@ -22,7 +22,7 @@ To-do list:
 13. Scale up - multiple self attention blocks, increase parameters to what is used in lectures.
     Run locally for a few iterations and see how long it takes. Estimate how long it would take
     to run N iterations. ✅
-14. Train N iterations on GPU
+14. Train N iterations on GPU  ✅
 """
 
 import json
@@ -372,7 +372,7 @@ def main():
     model.train()
     total_params = sum(p.numel() for p in model.parameters())
     print(f"Number of parameters: {total_params // 1e6}M parameters")
-    max_training_iterations = 8_001
+    max_training_iterations = 20_001
     batch_size = 64
     opt = AdamW(model.parameters(), lr=3e-4)
 
