@@ -64,12 +64,12 @@ def load_dataset(
         stoi = {c: i for i, c in enumerate(sorted(set(corpus)))}
         num_training_samples = len(corpus) - context_size
         X = torch.zeros((num_training_samples, context_size), dtype=torch.long)
-        Y = torch.zeros(num_training_samples, dtype=torch.long)
+        Y = torch.zeros((num_training_samples, context_size), dtype=torch.long)
         for i in range(num_training_samples):
             input_ctx = corpus[i : i + context_size]
-            output_c = corpus[i + context_size]
+            output_ctx = corpus[i + 1 : i + context_size + 1]
             X[i, :] = torch.tensor([stoi[c] for c in input_ctx], dtype=torch.long)
-            Y[i] = stoi[output_c]
+            Y[i, :] = torch.tensor([stoi[c] for c in output_ctx], dtype=torch.long)
 
         print("Saving processed dataset to cache")
         torch.save(X, "train_x.pt")
@@ -104,6 +104,8 @@ def estimate_loss_and_accuracy(
     model: nn.Module,
     X: torch.Tensor,
     Y: torch.Tensor,
+    context_size: int,
+    vocab_size: int,
     num_runs: int = 20,
     batch_size: int = 64,
 ) -> tuple[float, float]:
@@ -114,8 +116,12 @@ def estimate_loss_and_accuracy(
         X_batch = X[perm]
         Y_batch = Y[perm]
         logits = model.forward(X_batch)
-        preds = logits.argmax(dim=1)
-        loss = F.cross_entropy(logits, Y_batch)
+        preds = logits.argmax(dim=2)
+        loss = F.cross_entropy(
+            logits.view(batch_size * context_size, vocab_size),
+            Y_batch.view(batch_size * context_size),
+        )
+        assert preds.shape == Y_batch.shape
         accuracy = (preds == Y_batch).float().mean().item()
         losses.append(loss.item())
         accuracies.append(accuracy)
@@ -284,8 +290,7 @@ class MiniGPT(torch.nn.Module):
                 for _ in range(num_blocks)
             ]
         )
-        self.flatten = nn.Flatten(start_dim=1, end_dim=2)
-        self.linear = nn.Linear(embedding_size * context_size, vocab_size)
+        self.linear = nn.Linear(embedding_size, vocab_size)
         self.register_buffer(
             "positions", torch.tensor(range(self.context_size), dtype=torch.long)
         )
@@ -301,16 +306,22 @@ class MiniGPT(torch.nn.Module):
             nn.init.normal_(module.weight, mean=0.0, std=0.02)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
+        B, C = x.shape
         emb = self.embedding.forward(x)
         pos = self.positional_encoding.forward(self.positions)
         drop = self.dropout(emb + pos)
         sa = self.attention_blocks(drop)
-        flat = self.flatten(sa)
-        return self.linear(flat)
+        out = self.linear(sa)
+        assert tuple(out.shape) == (B, C, self.vocab_size)
+        return out
 
 
 def sample_from_model(
-    model: MiniGPT, context_size: int, stoi: Mapping[str, int], num_chars: int
+    model: MiniGPT,
+    context_size: int,
+    stoi: Mapping[str, int],
+    num_chars: int,
+    vocab_size: int,
 ) -> str:
     itos = {i: s for s, i in stoi.items()}
     current_ctx = "".join([itos[0] for _ in range(context_size)])
@@ -320,7 +331,10 @@ def sample_from_model(
             device
         )
         logits = model.forward(input)
-        probs = F.softmax(logits, dim=1)
+        assert tuple(logits.shape) == (1, context_size, vocab_size)
+        logits_last_token = logits[:, -1, :]
+        assert tuple(logits_last_token.shape) == (1, vocab_size)
+        probs = F.softmax(logits_last_token, dim=1)
         sample = torch.multinomial(probs, num_samples=1)
         next_char = itos[sample.item()]
         generated_chars.append(next_char)
@@ -370,19 +384,32 @@ def main():
         perm = torch.randperm(len(X["train"]))[:batch_size]
         X_batch = X["train"][perm]
         Y_batch = Y["train"][perm]
+        assert tuple(Y_batch.shape) == (batch_size, context_size)
         opt.zero_grad()
         logits = model.forward(X_batch)
-        loss = F.cross_entropy(logits, Y_batch)
+        # Calculate the loss for each of the tokens in the input
+        loss = F.cross_entropy(
+            logits.view(batch_size * context_size, vocab_size),
+            Y_batch.view(batch_size * context_size),
+        )
         loss.backward()
         opt.step()
 
         if i % measure_every == 0:
             model.eval()
             train_loss_estimate, _ = estimate_loss_and_accuracy(
-                model, X["train"], Y["train"]
+                model,
+                X["train"],
+                Y["train"],
+                context_size=context_size,
+                vocab_size=vocab_size,
             )
             val_loss_estimate, val_accuracy_estimate = estimate_loss_and_accuracy(
-                model, X["val"], Y["val"]
+                model,
+                X["val"],
+                Y["val"],
+                context_size=context_size,
+                vocab_size=vocab_size,
             )
             train_losses.append(train_loss_estimate)
             validation_losses.append(val_loss_estimate)
@@ -396,7 +423,11 @@ def main():
     print(f"Number of parameters: {total_params // 1e6}M parameters")
     model.eval()
     sample = sample_from_model(
-        model, stoi=stoi, context_size=context_size, num_chars=10000
+        model,
+        stoi=stoi,
+        context_size=context_size,
+        num_chars=10000,
+        vocab_size=vocab_size,
     )
     print(sample[:1000])
     Path("generated-sample.txt").write_text(sample)
