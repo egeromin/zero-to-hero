@@ -1,0 +1,139 @@
+Baseline with AdamW, 10K iterations:
+9000: train loss = 1.643144, val loss = 2.055470, val accuracy = 40.70%
+9500: train loss = 1.903642, val loss = 2.063898, val accuracy = 40.46%
+10000: train loss = 2.706694, val loss = 2.057284, val accuracy = 40.77%
+
+Adding one self attention head, 10K iterations:
+9000: train loss = 1.976574, val loss = 2.180738, val accuracy = 37.14%
+9500: train loss = 1.825904, val loss = 2.153589, val accuracy = 38.17%
+10000: train loss = 2.258611, val loss = 2.144004, val accuracy = 38.13%
+a, dume not, therath, Ghat thithed,
+Nost re'l gour thane himfan:
+My Iid lay te be; hill I dourd of, 
+
+Multi-head attention, 10K iterations:
+9000: train loss = 1.947432, val loss = 2.200529, val accuracy = 36.73%
+9500: train loss = 2.175491, val loss = 2.201480, val accuracy = 36.90%
+10000: train loss = 2.035626, val loss = 2.185989, val accuracy = 36.79%
+ foun, beose, an is meist an!
+
+ASEsERDO:
+Micowsised chove sile put at thif sextill
+Hio sfale seipe,
+
+Multi-head attention, remove everything that's not a transformer
+10000: train loss = 2.470916, val loss = 2.567218, val accuracy = 30.54%
+Number of parameters: 53953
+tu naive ly mhre borve dlcreuk watl navpreee ly fofeod I fikli: sury uossin to nassero mewy Anel hor
+
+With positional encoding, 10K
+10000: train loss = 2.234329, val loss = 2.438905, val accuracy = 31.70%
+Number of parameters: 54465
+upusto thau sur ouspa ipheseunst.
+
+DARY:
+Whall,, bilitheve,
+heve, lle sea piortin Ghon ro y :
+'t cen
+
+With residual connections, 10K
+10000: train loss = 2.532783, val loss = 2.475182, val accuracy = 31.49%
+Number of parameters: 58625
+y-ky plossos ofa nay t plaplow thot'dsserteswalls ss sorch.;
+Nerwe psofstll nhopsoult:
+I llse nxaol 
+
+With layer norm, 10K
+10000: train loss = 2.501643, val loss = 2.402423, val accuracy = 32.71%
+Number of parameters: 58881
+y-ky padseng ofaan:
+Ce wead fattt thessedteswadlt ws sow fi; weiw  hely.
+
+With dropout, 10K
+0: train loss = 4.513313, val loss = 5.930607, val accuracy = 11.04%
+500: train loss = 2.821646, val loss = 2.700363, val accuracy = 26.17%
+9500: train loss = 3.080015, val loss = 2.489176, val accuracy = 30.96%
+10000: train loss = 2.062665, val loss = 2.525136, val accuracy = 31.74%
+Number of parameters: 58881
+enet hot igletted thet ZA to  arentte fesor tor quiciseninet therf f teoo bs eith t th the stie thou
+
+With feedforward in attention block
+8500: train loss = 2.246442, val loss = 2.690192, val accuracy = 29.87%
+9000: train loss = 3.131166, val loss = 2.497395, val accuracy = 31.72%
+9500: train loss = 2.375231, val loss = 2.504447, val accuracy = 31.15%
+10000: train loss = 3.002119, val loss = 2.546999, val accuracy = 29.90%
+Number of parameters: 87809
+
+And'mlths nors?
+Wimc sostrer blut te.
+Win; Ifroures; I wuth'dabrengULED:ERIZABETeothfakiagucar.
+
+EE
+
+After fixing initialisation
+10000: train loss = 2.594849, val loss = 2.490274, val accuracy = 32.63%
+Number of parameters: 87809
+may howoff!
+
+fos, ahd ohe mare dtyer are,
+Myrll wott of your!
+
+PETR:
+BY yobehe dor yom I youm eof on
+
+After fixing self-attention - turns out this WASN'T BEING USED!!!
+Number of parameters: 112769
+0: train loss = 3.980143, val loss = 3.963771, val accuracy = 8.12%
+500: train loss = 2.773277, val loss = 2.757804, val accuracy = 23.67%
+1000: train loss = 2.508579, val loss = 2.460932, val accuracy = 29.69%
+Number of parameters: 112769
+
+And y poake sun tot nhar?
+
+FaRgKSES:
+GLORFETTot,
+TA
+OI
+TSAN I'!
+Hay thee conthe
+ nn The thencon the
+
+10K iterations of the previous
+9500: train loss = 2.499434, val loss = 2.398318, val accuracy = 32.50%
+10000: train loss = 2.462053, val loss = 2.512705, val accuracy = 30.94%
+Number of parameters: 112769
+e, drarelll aafellide af ullb.
+
+BI Thag Ir.
+RD lid: hay, by ur t iov dsy
+vtis ande st de loulose thi
+
+4D multi-head-attention, 1K iterations
+0: train loss = 3.858357, val loss = 3.837990, val accuracy = 8.20%
+500: train loss = 2.830274, val loss = 2.829807, val accuracy = 22.11%
+1000: train loss = 2.596923, val loss = 2.567773, val accuracy = 29.84%
+Number of parameters: 112769
+
+And y peake hun on mnele mor Agin w:
+Gey Fot on,
+TomeIl
+SAn me!
+
+
+BO KEeGNOnZHy
+Dun,
+ATh,
+Inn I KO
+
+Using flash attention, 1K iterations
+0: train loss = 3.962020, val loss = 3.948527, val accuracy = 8.20%
+500: train loss = 2.756977, val loss = 2.736682, val accuracy = 22.81%
+1000: train loss = 2.527491, val loss = 2.490646, val accuracy = 30.63%
+Number of parameters: 112769
+
+
+26M param model: to do a single step, requires 15.21 seconds, let's say 15
+seconds. So, lower bound on 5K training iterations = 15*5K = 75K seconds >
+20hours. Since forward pass takes 6.66s, let's say 6s, and each evaluation does
+20 of those, we add an additional 120 seconds 5K/500 times, so an additional
+1200 seconds just for evaluation. Not coooool.
