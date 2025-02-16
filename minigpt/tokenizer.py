@@ -13,11 +13,31 @@ def main():
     tuples_sorted = sorted(pair_counts.items(), key=lambda x: x[1], reverse=True)
     top_tuple = next(iter(tuples_sorted))[0]
     top_tuple_str = bytes(top_tuple).decode("utf-8")
+    count_top_tuple = pair_counts[top_tuple]
     print(
         f"Most common tuple: {top_tuple}, "
         f"corresponding to {top_tuple_str}, "
-        f"appears {pair_counts[top_tuple]} times."
+        f"appears {count_top_tuple} times."
     )
+
+    # Task 2: replace the most common pair with a new token.
+    next_token = 256
+    merged_bytes = []
+    i = 0
+    print(f"Input byte length: {len(input_bytes)}")
+    while i < len(input_bytes):
+        if (
+            i < len(input_bytes) - 1
+            and (input_bytes[i], input_bytes[i + 1]) == top_tuple
+        ):
+            merged_bytes.append(next_token)
+            i += 2
+        else:
+            merged_bytes.append(input_bytes[i])
+            i += 1
+
+    print(f"Merged bytes length: {len(merged_bytes)}")
+    assert len(merged_bytes) == len(input_bytes) - count_top_tuple
 
 
 if __name__ == "__main__":
