@@ -9,6 +9,7 @@ dependencies = [
     "numpy<2",
     "regex>=2024.11.6",
     "sentencepiece>=0.2.0",
+    "tiktoken>=0.9.0",
     "torch<2.3.0",
     "tqdm>=4.67.1",
 ]

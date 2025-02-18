@@ -4,6 +4,8 @@ import os
 
 import regex
 import sentencepiece as spm
+import tiktoken
+
 
 # TODOs:
 # Simplify the implementation to use `merges` and `vocab` dictionary.  ✅
@@ -22,9 +24,10 @@ class Tokenizer:
         self.vocab_size = 256
         self.merges = []
         self.vocab = {i: bytes([i]) for i in range(self.vocab_size)}
-        self.r50k_pat_str = r"""'(?:[sdmt]|ll|ve|re)| ?\p{L}++| ?\p{N}++| ?[^\s\p{L}\p{N}]++|\s++$|\s+(?!\S)|\s"""
-        self.r50k_pat = regex.compile(self.r50k_pat_str)
-        text_chunks = self.r50k_pat.findall(input_text)
+        # self.pat_str = r"""'(?:[sdmt]|ll|ve|re)| ?\p{L}++| ?\p{N}++| ?[^\s\p{L}\p{N}]++|\s++$|\s+(?!\S)|\s"""  # gpt-2 pattern
+        self.pat_str = r"""'(?i:[sdmt]|ll|ve|re)|[^\r\n\p{L}\p{N}]?+\p{L}+|\p{N}{1,3}| ?[^\s\p{L}\p{N}]++[\r\n]*|\s*[\r\n]|\s+(?!\S)|\s+"""  # gpt-4 pattern
+        self.pat = regex.compile(self.pat_str)
+        text_chunks = self.pat.findall(input_text)
         tokens_per_chunk = [
             [int(b) for b in chunk.encode("utf-8")] for chunk in text_chunks
         ]
@@ -94,7 +97,7 @@ class Tokenizer:
         return tokens
 
     def encode(self, text: str) -> list[int]:
-        text_chunks = self.r50k_pat.findall(text)
+        text_chunks = self.pat.findall(text)
         tokens = []
         for chunk in text_chunks:
             tokens.extend(self.encode_chunk(chunk))
@@ -167,5 +170,19 @@ def main():
     print(tokenizer.decode([129]))
 
 
+def compare_tiktoken():
+    enc = tiktoken.get_encoding("cl100k_base")  # this is the GPT-4 tokenizer
+    test_text = "hello world!!!? (안녕하세요!) ZOINK ✅"
+    ids = enc.encode(test_text)
+    text = enc.decode(ids)  # get the same text back
+    print(text)
+
+    train_text = Path("blogpost.txt").read_text()
+    tokenizer = Tokenizer(train_text, target_vocab_size=500)
+    ids = tokenizer.encode(test_text)
+    text = tokenizer.decode(ids)
+    print(text)
+
+
 if __name__ == "__main__":
-    try_sentencepiece()
+    compare_tiktoken()
