@@ -35,15 +35,18 @@ class Tokenizer:
             )
 
     @classmethod
+    def _get_pair_counts(cls, tokens: list[int]) -> dict[tuple[int, int], int]:
+        pair_counts = defaultdict(int)
+        for a, b in zip(tokens, tokens[1:]):
+            pair_counts[(a, b)] += 1
+        return pair_counts
+
+    @classmethod
     def find_most_common_pair(cls, tokens: list[int]) -> tuple[int, int] | None:
         """Find the most common pair of tokens"""
         if len(tokens) < 2:
             return None
-
-        pair_counts = defaultdict(int)
-        for a, b in zip(tokens, tokens[1:]):
-            pair_counts[(a, b)] += 1
-
+        pair_counts = cls._get_pair_counts(tokens)
         tuples_sorted = sorted(pair_counts.items(), key=lambda x: x[1], reverse=True)
         top_tuple = next(iter(tuples_sorted))[0]
         return top_tuple
@@ -67,12 +70,10 @@ class Tokenizer:
         return output_tokens
 
     def encode(self, text: str) -> list[int]:
-        output_tokens = [int(b) for b in text.encode("utf-8")]
+        tokens = [int(b) for b in text.encode("utf-8")]
         for token, original_pair in self.merges:
-            output_tokens = self._substitute(
-                output_tokens, list(original_pair), [token]
-            )
-        return output_tokens
+            tokens = self._substitute(tokens, list(original_pair), [token])
+        return tokens
 
     def decode(self, tokens: list[int]) -> str:
         token_bytes = b"".join(self.vocab[token] for token in tokens)
@@ -83,9 +84,12 @@ def main():
     input_text = Path("blogpost.txt").read_text()
     tokenizer = Tokenizer(input_text, 300)
 
-    text_to_encode = input_text[50:120]
+    text_to_encode = input_text
     encoded = tokenizer.encode(text_to_encode)
-    print(f"Encoded text has length: {len(encoded)}")
+    compression_ratio = len(encoded) / len(input_text)
+    print(
+        f"Encoded text has length: {len(encoded)}, compression ratio: {compression_ratio * 100:.0f}%"
+    )
     decoded = tokenizer.decode(encoded)
     assert text_to_encode == decoded
 
