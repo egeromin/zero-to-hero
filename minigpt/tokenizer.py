@@ -2,54 +2,51 @@ from collections import defaultdict
 from pathlib import Path
 
 
+# TODOs:
+# Simplify the implementation to use `merges` and `vocab` dictionary.  ✅
+# Fix decoding invalid tokens using the "replace" mechanism  ✅
+# Implement the GPT-2 regex for splitting and tokenizing each chunk separately.
+# Play around with tiktoken - specifically, reproduce the SolidGoldMagikarp issue
+# Play around with sentencepiece and use it to tokenize
+# Try implementing adding a new token to an existing mini-GPT model and then finetuning it.
+
+
 class Tokenizer:
     def __init__(self, input_text: str, target_vocab_size: int):
         """Train the tokenizer on a given input text
         at initialization."""
-        input_bytes = [int(b) for b in input_text.encode("utf-8")]
-        self.first_new_token = 256
-        assert target_vocab_size >= self.first_new_token
-        self.new_tokens = list(range(self.first_new_token, target_vocab_size))
-        self.original_pairs = []
+        self.vocab_size = 256
+        self.merges = []
+        self.vocab = {i: bytes([i]) for i in range(self.vocab_size)}
+        tokens = [int(b) for b in input_text.encode("utf-8")]
+        while self.vocab_size < target_vocab_size:
+            top_tuple = self.find_most_common_pair(tokens)
+            if top_tuple is None:
+                print("No more tokens to merge, aborting prematurely")
+                break
+            tokens = self._substitute(tokens, list(top_tuple), [self.vocab_size])
+            self.merges.append((self.vocab_size, top_tuple))
+            self.vocab_size += 1
 
-        def merge_input_bytes(input_bytes: list[int], next_token: int) -> list[int]:
-            # Task 1: find the most common pair of bytes
-            pair_counts = defaultdict(int)
-            for a, b in zip(input_bytes, input_bytes[1:]):
-                pair_counts[(a, b)] += 1
-
-            tuples_sorted = sorted(
-                pair_counts.items(), key=lambda x: x[1], reverse=True
+        # Finish building the vocabulary, for faster decoding.
+        for token, original_pair in self.merges:
+            self.vocab[token] = (
+                self.vocab[original_pair[0]] + self.vocab[original_pair[1]]
             )
-            top_tuple = next(iter(tuples_sorted))[0]
-            # try:
-            #     top_tuple_str = bytes(top_tuple).decode("utf-8")
-            # except (UnicodeDecodeError, ValueError):
-            #     top_tuple_str = "undefined: decode error"
-            count_top_tuple = pair_counts[top_tuple]
-            # print(
-            #     f"Most common tuple: {top_tuple}, "
-            #     f"corresponding to {top_tuple_str}, "
-            #     f"appears {count_top_tuple} times."
-            # )
-            self.original_pairs.append(top_tuple)
 
-            # Task 2: replace the most common pair with a new token.
-            merged_bytes = self._substitute(input_bytes, list(top_tuple), [next_token])
-            # print(f"Merged bytes length: {len(merged_bytes)}")
+    @classmethod
+    def find_most_common_pair(cls, tokens: list[int]) -> tuple[int, int] | None:
+        """Find the most common pair of tokens"""
+        if len(tokens) < 2:
+            return None
 
-            # Strict equality might not hold. For example, consider a string
-            # where are characters are the same: aaaaa
-            # len(input_bytes) == 5
-            # count_top_tuple == 4
-            # len(merged_bytes) == 3
-            assert len(merged_bytes) >= len(input_bytes) - count_top_tuple
-            return merged_bytes
+        pair_counts = defaultdict(int)
+        for a, b in zip(tokens, tokens[1:]):
+            pair_counts[(a, b)] += 1
 
-        for next_token in self.new_tokens:
-            input_bytes = merge_input_bytes(input_bytes, next_token)
-
-        # print(f"Final list of input bytes starts with: {input_bytes[:10]}")
+        tuples_sorted = sorted(pair_counts.items(), key=lambda x: x[1], reverse=True)
+        top_tuple = next(iter(tuples_sorted))[0]
+        return top_tuple
 
     @classmethod
     def _substitute(
@@ -71,21 +68,15 @@ class Tokenizer:
 
     def encode(self, text: str) -> list[int]:
         output_tokens = [int(b) for b in text.encode("utf-8")]
-        for token, original_pair in zip(self.new_tokens, self.original_pairs):
+        for token, original_pair in self.merges:
             output_tokens = self._substitute(
                 output_tokens, list(original_pair), [token]
             )
         return output_tokens
 
     def decode(self, tokens: list[int]) -> str:
-        rebuilt_tokens = list(tokens)
-        for token, original_pair in reversed(
-            list(zip(self.new_tokens, self.original_pairs))
-        ):
-            rebuilt_tokens = self._substitute(
-                rebuilt_tokens, [token], list(original_pair)
-            )
-        return bytes(rebuilt_tokens).decode("utf-8")
+        token_bytes = b"".join(self.vocab[token] for token in tokens)
+        return token_bytes.decode("utf-8", errors="replace")
 
 
 def main():
@@ -97,6 +88,8 @@ def main():
     print(f"Encoded text has length: {len(encoded)}")
     decoded = tokenizer.decode(encoded)
     assert text_to_encode == decoded
+
+    print(tokenizer.decode([129]))
 
 
 if __name__ == "__main__":
