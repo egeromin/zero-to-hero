@@ -1,3 +1,4 @@
 train_x.pt
 train_y.pt
 stoi.json
+tok500.*

@@ -1,14 +1,17 @@
 from collections import defaultdict
 from pathlib import Path
+import os
 
 import regex
+import sentencepiece as spm
 
 # TODOs:
 # Simplify the implementation to use `merges` and `vocab` dictionary.  ✅
 # Fix decoding invalid tokens using the "replace" mechanism  ✅
 # Implement the GPT-2 regex for splitting and tokenizing each chunk separately. ✅
-# Play around with tiktoken - specifically, reproduce the SolidGoldMagikarp issue
-# Play around with sentencepiece and use it to tokenize
+# Play around with sentencepiece and use it to tokenize ✅
+# Play around with tiktoken - specifically, reproduce the SolidGoldMagikarp issue  ✅
+# Implement the GPT4 tokenizer and compare to tiktoken
 # Try implementing adding a new token to an existing mini-GPT model and then finetuning it.
 
 
@@ -102,6 +105,52 @@ class Tokenizer:
         return token_bytes.decode("utf-8", errors="replace")
 
 
+def try_sentencepiece():
+    options = dict(
+        # input spec
+        input="blogpost.txt",
+        input_format="text",
+        # output spec
+        model_prefix="tok500",  # output filename prefix
+        # algorithm spec
+        # BPE alg
+        model_type="bpe",
+        vocab_size=500,
+        # normalization
+        normalization_rule_name="identity",  # ew, turn off normalization
+        remove_extra_whitespaces=False,
+        input_sentence_size=200000000,  # max number of training sentences
+        max_sentence_length=4192,  # max number of bytes per sentence
+        seed_sentencepiece_size=1000000,
+        shuffle_input_sentence=True,
+        # rare word treatment
+        character_coverage=0.99995,
+        byte_fallback=True,
+        # merge rules
+        split_digits=True,
+        split_by_unicode_script=True,
+        split_by_whitespace=True,
+        split_by_number=True,
+        max_sentencepiece_length=16,
+        add_dummy_prefix=True,
+        allow_whitespace_only_pieces=True,
+        # special tokens
+        unk_id=0,  # the UNK token MUST exist
+        bos_id=1,  # the others are optional, set to -1 to turn off
+        eos_id=2,
+        pad_id=-1,
+        # systems
+        num_threads=os.cpu_count(),  # use ~all system resources
+    )
+    spm.SentencePieceTrainer.train(**options)
+    sp = spm.SentencePieceProcessor()
+    sp.load("tok500.model")
+    print([(sp.id_to_piece(i), i) for i in range(sp.get_piece_size())])
+    ids = sp.encode("hello 안녕하세요")
+    print(ids)
+    print([(sp.id_to_piece(i), i) for i in ids])
+
+
 def main():
     input_text = Path("blogpost.txt").read_text()
     tokenizer = Tokenizer(input_text, 300)
@@ -119,4 +168,4 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    try_sentencepiece()
