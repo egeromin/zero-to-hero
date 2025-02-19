@@ -1,6 +1,7 @@
 from collections import defaultdict
 from pathlib import Path
 import os
+from typing import Mapping
 
 import regex
 import sentencepiece as spm
@@ -18,36 +19,45 @@ import tiktoken
 
 
 class Tokenizer:
-    def __init__(self, input_text: str, target_vocab_size: int):
+    pat_str = r"""'(?i:[sdmt]|ll|ve|re)|[^\r\n\p{L}\p{N}]?+\p{L}+|\p{N}{1,3}| ?[^\s\p{L}\p{N}]++[\r\n]*|\s*[\r\n]|\s+(?!\S)|\s+"""  # gpt-4 pattern
+    pat = regex.compile(pat_str)
+
+    def __init__(
+        self,
+        merges: list[tuple[int, tuple[int, int]]],
+        vocab: Mapping[int, bytes],
+    ):
+        self.merges = merges
+        self.vocab = vocab
+
+    @classmethod
+    def train(cls, input_text: str, target_vocab_size: int):
         """Train the tokenizer on a given input text
         at initialization."""
-        self.vocab_size = 256
-        self.merges = []
-        self.vocab = {i: bytes([i]) for i in range(self.vocab_size)}
-        # self.pat_str = r"""'(?:[sdmt]|ll|ve|re)| ?\p{L}++| ?\p{N}++| ?[^\s\p{L}\p{N}]++|\s++$|\s+(?!\S)|\s"""  # gpt-2 pattern
-        self.pat_str = r"""'(?i:[sdmt]|ll|ve|re)|[^\r\n\p{L}\p{N}]?+\p{L}+|\p{N}{1,3}| ?[^\s\p{L}\p{N}]++[\r\n]*|\s*[\r\n]|\s+(?!\S)|\s+"""  # gpt-4 pattern
-        self.pat = regex.compile(self.pat_str)
-        text_chunks = self.pat.findall(input_text)
+        vocab_size = 256
+        merges = []
+        vocab = {i: bytes([i]) for i in range(vocab_size)}
+        text_chunks = cls.pat.findall(input_text)
         tokens_per_chunk = [
             [int(b) for b in chunk.encode("utf-8")] for chunk in text_chunks
         ]
-        while self.vocab_size < target_vocab_size:
-            top_tuple = self.find_most_common_pair(tokens_per_chunk)
+        while vocab_size < target_vocab_size:
+            top_tuple = cls.find_most_common_pair(tokens_per_chunk)
             if top_tuple is None:
                 print("No more tokens to merge, aborting prematurely")
                 break
             tokens_per_chunk = [
-                self._substitute(chunk, list(top_tuple), [self.vocab_size])
+                cls._substitute(chunk, list(top_tuple), [vocab_size])
                 for chunk in tokens_per_chunk
             ]
-            self.merges.append((self.vocab_size, top_tuple))
-            self.vocab_size += 1
+            merges.append((vocab_size, top_tuple))
+            vocab_size += 1
 
         # Finish building the vocabulary, for faster decoding.
-        for token, original_pair in self.merges:
-            self.vocab[token] = (
-                self.vocab[original_pair[0]] + self.vocab[original_pair[1]]
-            )
+        for token, original_pair in merges:
+            vocab[token] = vocab[original_pair[0]] + vocab[original_pair[1]]
+
+        return cls(merges=merges, vocab=vocab)
 
     @classmethod
     def _get_pair_counts(
@@ -156,7 +166,7 @@ def try_sentencepiece():
 
 def main():
     input_text = Path("blogpost.txt").read_text()
-    tokenizer = Tokenizer(input_text, 300)
+    tokenizer = Tokenizer.train(input_text, 300)
 
     text_to_encode = input_text
     encoded = tokenizer.encode(text_to_encode)
@@ -178,9 +188,10 @@ def compare_tiktoken():
     print(text)
 
     train_text = Path("blogpost.txt").read_text()
-    tokenizer = Tokenizer(train_text, target_vocab_size=500)
+    tokenizer = Tokenizer.train(train_text, target_vocab_size=500)
     ids = tokenizer.encode(test_text)
     text = tokenizer.decode(ids)
+    # print(enc._mergeable_ranks)
     print(text)
 
 
