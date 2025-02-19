@@ -14,7 +14,7 @@ import tiktoken
 # Implement the GPT-2 regex for splitting and tokenizing each chunk separately. ✅
 # Play around with sentencepiece and use it to tokenize ✅
 # Play around with tiktoken - specifically, reproduce the SolidGoldMagikarp issue  ✅
-# Implement the GPT4 tokenizer and compare to tiktoken
+# Implement the GPT4 tokenizer and compare to tiktoken ✅
 # Try implementing adding a new token to an existing mini-GPT model and then finetuning it.
 
 
@@ -26,9 +26,11 @@ class Tokenizer:
         self,
         merges: list[tuple[int, tuple[int, int]]],
         vocab: Mapping[int, bytes],
+        byte_mapping: Mapping[int, int],
     ):
         self.merges = merges
         self.vocab = vocab
+        self.byte_mapping = byte_mapping
 
     @classmethod
     def train(cls, input_text: str, target_vocab_size: int):
@@ -36,6 +38,7 @@ class Tokenizer:
         at initialization."""
         vocab_size = 256
         merges = []
+        byte_mapping = {i: i for i in range(vocab_size)}
         vocab = {i: bytes([i]) for i in range(vocab_size)}
         text_chunks = cls.pat.findall(input_text)
         tokens_per_chunk = [
@@ -57,7 +60,65 @@ class Tokenizer:
         for token, original_pair in merges:
             vocab[token] = vocab[original_pair[0]] + vocab[original_pair[1]]
 
-        return cls(merges=merges, vocab=vocab)
+        return cls(merges=merges, vocab=vocab, byte_mapping=byte_mapping)
+
+    @classmethod
+    def from_tiktoken(cls, enc: tiktoken.Encoding):
+        mergeable_ranks = enc._mergeable_ranks  # inverse of vocab
+
+        def pair_rank(pair: tuple[bytes, bytes]) -> int | None:
+            return mergeable_ranks.get(b"".join(pair))
+
+        def bpe_on_token(token: bytes, max_rank: int) -> tuple[bytes, bytes]:
+            # Perform byte-pair encoding on the token, constraining
+            # the vocabulary of merges to be those with rank
+            # strictly lower than max_rank.
+            parts = [bytes([b]) for b in token]
+            while len(parts) > 2:
+                possible_pairs = list(enumerate(zip(parts[:-1], parts[1:])))
+                pairs_sorted = sorted(
+                    possible_pairs, key=lambda x: pair_rank(x[1]) or max_rank
+                )
+                min_idx, min_pair = pairs_sorted[0]
+                min_rank = pair_rank(min_pair)
+                if min_rank >= max_rank:
+                    break
+                parts = (
+                    parts[:min_idx]
+                    + [parts[min_idx] + parts[min_idx + 1]]
+                    + parts[min_idx + 2 :]
+                )
+            assert len(parts) == 2
+            return tuple(parts)
+
+        byte_mapping = {}
+        merges_dict = {}
+        for token_str, rank in mergeable_ranks.items():
+            if len(token_str) == 1:
+                byte_mapping[token_str[0]] = rank
+            else:
+                # In this case, we have a byte-sequence of length >1,
+                # and we must figure out how it splits into sub-chunks.
+                # To do this, we can run byte-pair encoding on the byte-string,
+                # observing that the split will the two sub-strings that are
+                # left after performing byte-pair encoding using all merges
+                # of lower rank. To perform this byte-pair encoding, we can merge
+                # adjacent parts iteratively, starting with those of lowest rank.
+                pair_as_bytes = bpe_on_token(token_str, rank)
+                p_rank = pair_rank(pair_as_bytes)
+                pair = (
+                    mergeable_ranks[pair_as_bytes[0]],
+                    mergeable_ranks[pair_as_bytes[1]],
+                )
+                merges_dict[pair] = p_rank
+
+        pairs_sorted = sorted(merges_dict.keys(), key=lambda x: merges_dict[x])
+        merges = [(merges_dict[pair], pair) for pair in pairs_sorted]
+        vocab = {r: bytes([b]) for b, r in byte_mapping.items()}
+        for token, original_pair in merges:
+            vocab[token] = vocab[original_pair[0]] + vocab[original_pair[1]]
+
+        return cls(merges=merges, vocab=vocab, byte_mapping=byte_mapping)
 
     @classmethod
     def _get_pair_counts(
@@ -101,7 +162,7 @@ class Tokenizer:
         return output_tokens
 
     def encode_chunk(self, text_chunk: str) -> list[int]:
-        tokens = [int(b) for b in text_chunk.encode("utf-8")]
+        tokens = [self.byte_mapping[b] for b in text_chunk.encode("utf-8")]
         for token, original_pair in self.merges:
             tokens = self._substitute(tokens, list(original_pair), [token])
         return tokens
@@ -191,8 +252,13 @@ def compare_tiktoken():
     tokenizer = Tokenizer.train(train_text, target_vocab_size=500)
     ids = tokenizer.encode(test_text)
     text = tokenizer.decode(ids)
-    # print(enc._mergeable_ranks)
     print(text)
+
+    tokenizer = Tokenizer.from_tiktoken(enc)
+    encoded = enc.encode(test_text)
+    print(tokenizer.decode(encoded))
+    encoded = tokenizer.encode(test_text)
+    print(enc.decode(encoded))
 
 
 if __name__ == "__main__":
