@@ -43,7 +43,7 @@ class Tokenizer:
 
     @property
     def vocab_size(self) -> int:
-        return len(self.vocab) + len(self.byte_mapping)
+        return len(self.vocab)
 
     def save(self, target_dir: Path):
         if not target_dir.exists():
