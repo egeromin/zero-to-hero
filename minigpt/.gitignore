@@ -3,3 +3,4 @@ train_y.pt
 stoi.json
 tok500.*
 __pycache__/
+.python-version
