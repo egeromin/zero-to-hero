@@ -64,7 +64,7 @@ def load_dataset(
         print("Reading corpus...")
         corpus = Path("tinyshakespeare.txt").read_text()
         print("Encoding corpus...")
-        tokens = tokenizer.encode(corpus)
+        tokens = tokenizer.encode(corpus, verbose=True)
         print("Done encoding corpus.")
         num_training_samples = len(tokens) - context_size
         X = torch.zeros((num_training_samples, context_size), dtype=torch.long)
