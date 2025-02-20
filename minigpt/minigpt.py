@@ -25,7 +25,6 @@ To-do list:
 14. Train N iterations on GPU  ✅
 """
 
-import json
 import math
 import sys
 from pathlib import Path
@@ -39,6 +38,8 @@ from matplotlib import pyplot as plt
 from torch import nn
 from torch.optim import AdamW
 
+from tokenizer import Tokenizer
+
 torch.manual_seed(1337)
 DROPOUT = 0.2
 device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -48,8 +49,8 @@ if device == "cuda":
 
 
 def load_dataset(
-    context_size: int,
-) -> tuple[Mapping[str, torch.Tensor], Mapping[str, torch.Tensor], Mapping[str, int]]:
+    context_size: int, tokenizer: Tokenizer
+) -> tuple[Mapping[str, torch.Tensor], Mapping[str, torch.Tensor]]:
     """
     Returns a tensor of X's, Y's, already prepared for training,
     given the context size.
@@ -61,23 +62,21 @@ def load_dataset(
     """
     if not Path("train_x.pt").exists():
         corpus = Path("tinyshakespeare.txt").read_text()
-        stoi = {c: i for i, c in enumerate(sorted(set(corpus)))}
-        num_training_samples = len(corpus) - context_size
+        tokens = tokenizer.encode(corpus)
+        num_training_samples = len(tokens) - context_size
         X = torch.zeros((num_training_samples, context_size), dtype=torch.long)
         Y = torch.zeros((num_training_samples, context_size), dtype=torch.long)
         for i in range(num_training_samples):
-            input_ctx = corpus[i : i + context_size]
-            output_ctx = corpus[i + 1 : i + context_size + 1]
-            X[i, :] = torch.tensor([stoi[c] for c in input_ctx], dtype=torch.long)
-            Y[i, :] = torch.tensor([stoi[c] for c in output_ctx], dtype=torch.long)
+            input_ctx = tokens[i : i + context_size]
+            output_ctx = tokens[i + 1 : i + context_size + 1]
+            X[i, :] = torch.tensor(input_ctx, dtype=torch.long)
+            Y[i, :] = torch.tensor(output_ctx, dtype=torch.long)
 
         print("Saving processed dataset to cache")
         torch.save(X, "train_x.pt")
         torch.save(Y, "train_y.pt")
-        Path("stoi.json").write_text(json.dumps(stoi, indent=2))
     else:
         print("Loading cached dataset.")
-        stoi = json.loads(Path("stoi.json").read_text())
         X = torch.load("train_x.pt")
         Y = torch.load("train_y.pt")
 
@@ -96,7 +95,7 @@ def load_dataset(
     X_val = X[split:]
     Y_val = Y[split:]
 
-    return {"train": X_train, "val": X_val}, {"train": Y_train, "val": Y_val}, stoi
+    return {"train": X_train, "val": X_val}, {"train": Y_train, "val": Y_val}
 
 
 @torch.no_grad()
@@ -319,28 +318,23 @@ class MiniGPT(torch.nn.Module):
 def sample_from_model(
     model: MiniGPT,
     context_size: int,
-    stoi: Mapping[str, int],
     num_chars: int,
     vocab_size: int,
-) -> str:
-    itos = {i: s for s, i in stoi.items()}
-    current_ctx = "".join([itos[0] for _ in range(context_size)])
-    generated_chars = []
+) -> list[int]:
+    generated_tokens: list[int] = []
+    current_ctx = [0] * context_size
     for _sample in range(num_chars):
-        input = torch.tensor([[stoi[c] for c in current_ctx]], dtype=torch.long).to(
-            device
-        )
+        input = torch.tensor([current_ctx], dtype=torch.long).to(device)
         logits = model.forward(input)
         assert tuple(logits.shape) == (1, context_size, vocab_size)
         logits_last_token = logits[:, -1, :]
         assert tuple(logits_last_token.shape) == (1, vocab_size)
         probs = F.softmax(logits_last_token, dim=1)
         sample = torch.multinomial(probs, num_samples=1)
-        next_char = itos[sample.item()]
-        generated_chars.append(next_char)
-        current_ctx = current_ctx[1:] + next_char
+        generated_tokens.append(sample.item())
+        current_ctx = current_ctx[1:] + [sample.item()]
 
-    return "".join(generated_chars)
+    return generated_tokens
 
 
 def main():
@@ -351,12 +345,13 @@ def main():
     print(f"Device: {device}")
     print("Loading dataset...")
     context_size = 256
-    X, Y, stoi = load_dataset(context_size=context_size)
+    tokenizer = Tokenizer.load(Path("tokenizer"))
+    X, Y = load_dataset(context_size=context_size, tokenizer=tokenizer)
     print(
         f"Done loading dataset. Train size = {len(X['train'])}, val size = {len(X['val'])}"
     )
 
-    vocab_size = len(stoi)
+    vocab_size = tokenizer.vocab_size
     print(f"Vocab size = {vocab_size}")
     model = MiniGPT(
         vocab_size=vocab_size,
@@ -422,13 +417,13 @@ def main():
 
     print(f"Number of parameters: {total_params // 1e6}M parameters")
     model.eval()
-    sample = sample_from_model(
+    sampled_tokens = sample_from_model(
         model,
-        stoi=stoi,
         context_size=context_size,
         num_chars=10000,
         vocab_size=vocab_size,
     )
+    sample = tokenizer.decode(sampled_tokens)
     print(sample[:1000])
     Path("generated-sample.txt").write_text(sample)
 

@@ -41,6 +41,10 @@ class Tokenizer:
         self.vocab = vocab
         self.byte_mapping = byte_mapping
 
+    @property
+    def vocab_size(self) -> int:
+        return len(self.vocab) + len(self.byte_mapping)
+
     def save(self, target_dir: Path):
         if not target_dir.exists():
             target_dir.mkdir()
@@ -291,8 +295,8 @@ def compare_tiktoken():
 
 def train_shakespeare():
     """Train the tokenizer on the shakespeare dataset."""
-    train_text = Path("tinyshakespeare.txt").read_text()
-    tokenizer = Tokenizer.train(train_text, target_vocab_size=10000)
+    train_text = Path("blogpost.txt").read_text()
+    tokenizer = Tokenizer.train(train_text, target_vocab_size=500)
     tokenizer.save(Path("tokenizer"))
     test_text = "hello world!!!? (안녕하세요!) ZOINK ✅"
     ids = tokenizer.encode(test_text)
