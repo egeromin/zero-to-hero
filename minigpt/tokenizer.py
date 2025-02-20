@@ -16,6 +16,12 @@ import tiktoken
 # Play around with tiktoken - specifically, reproduce the SolidGoldMagikarp issue  ✅
 # Implement the GPT4 tokenizer and compare to tiktoken ✅
 # Try implementing adding a new token to an existing mini-GPT model and then finetuning it.
+#     To do this, we have to extend the embedding table, and then also extend the logits.
+#     Can freeze the original weights and then train only the new ones.
+#     To test this, first re-train the mini-Shakespeare dataset, but using the tokenizer and a large-ish
+#     target vocab size. And then, add a special token between different plays or otherwise breaking
+#     up the input corpus. Fine tune on that.
+#     BIG TEST: after training on the GPU, can I fine-tune on CPU?
 
 
 class Tokenizer:

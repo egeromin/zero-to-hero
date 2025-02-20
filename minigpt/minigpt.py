@@ -372,7 +372,7 @@ def main():
     model.train()
     total_params = sum(p.numel() for p in model.parameters())
     print(f"Number of parameters: {total_params // 1e6}M parameters")
-    max_training_iterations = 20_001
+    max_training_iterations = 12_001
     batch_size = 64
     opt = AdamW(model.parameters(), lr=3e-4)
 
@@ -451,6 +451,8 @@ def main():
         plt.show()
     else:
         plt.savefig("training-plots.png", dpi=300)
+
+    torch.save(model.state_dict(), "model-minigpt.pth")
 
 
 if __name__ == "__main__":
