@@ -199,9 +199,15 @@ class Tokenizer:
             tokens = self._substitute(tokens, list(original_pair), [token])
         return tokens
 
-    def encode(self, text: str) -> list[int]:
+    def encode(self, text: str, verbose: bool = False) -> list[int]:
+        if verbose:
+            print("Encoding. Finding chunks...")
         text_chunks = self.pat.findall(text)
+        if verbose:
+            print("Done finding chunks.")
         tokens = []
+        if verbose:
+            text_chunks = tqdm(text_chunks)
         for chunk in text_chunks:
             tokens.extend(self.encode_chunk(chunk))
         return tokens
@@ -299,7 +305,7 @@ def train_shakespeare():
     tokenizer = Tokenizer.train(train_text, target_vocab_size=500)
     tokenizer.save(Path("tokenizer"))
     test_text = "hello world!!!? (안녕하세요!) ZOINK ✅"
-    ids = tokenizer.encode(test_text)
+    ids = tokenizer.encode(test_text, verbose=True)
 
     t2 = Tokenizer.load(Path("tokenizer"))
     assert t2.decode(ids) == test_text
