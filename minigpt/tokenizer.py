@@ -1,3 +1,4 @@
+import json
 from collections import defaultdict
 from pathlib import Path
 import os
@@ -6,6 +7,8 @@ from typing import Mapping
 import regex
 import sentencepiece as spm
 import tiktoken
+from tqdm import tqdm
+import pickle
 
 
 # TODOs:
@@ -38,6 +41,22 @@ class Tokenizer:
         self.vocab = vocab
         self.byte_mapping = byte_mapping
 
+    def save(self, target_dir: Path):
+        if not target_dir.exists():
+            target_dir.mkdir()
+        elif not target_dir.is_dir():
+            raise RuntimeError(f"{str(target_dir)} exists and is not a directory")
+        (target_dir / "merges.json").write_text(json.dumps(self.merges))
+        (target_dir / "vocab.bin").write_bytes(pickle.dumps(self.vocab))
+        (target_dir / "byte_mapping.bin").write_bytes(pickle.dumps(self.byte_mapping))
+
+    @classmethod
+    def load(cls, model_dir: Path):
+        merges = json.loads((model_dir / "merges.json").read_text())
+        vocab = pickle.loads((model_dir / "vocab.bin").read_bytes())
+        byte_mapping = pickle.loads((model_dir / "byte_mapping.bin").read_bytes())
+        return cls(merges, vocab, byte_mapping)
+
     @classmethod
     def train(cls, input_text: str, target_vocab_size: int):
         """Train the tokenizer on a given input text
@@ -50,7 +69,8 @@ class Tokenizer:
         tokens_per_chunk = [
             [int(b) for b in chunk.encode("utf-8")] for chunk in text_chunks
         ]
-        while vocab_size < target_vocab_size:
+        start_vocab_size = vocab_size
+        for _ in tqdm(range(target_vocab_size - start_vocab_size)):
             top_tuple = cls.find_most_common_pair(tokens_per_chunk)
             if top_tuple is None:
                 print("No more tokens to merge, aborting prematurely")
@@ -145,6 +165,8 @@ class Tokenizer:
         pair_counts = defaultdict(int)
         for chunk in tokens_per_chunk:
             pair_counts = cls._get_pair_counts(chunk, existing_pair_counts=pair_counts)
+        if not pair_counts:
+            return None
         tuples_sorted = sorted(pair_counts.items(), key=lambda x: x[1], reverse=True)
         top_tuple = next(iter(tuples_sorted))[0]
         return top_tuple
@@ -267,5 +289,18 @@ def compare_tiktoken():
     print(enc.decode(encoded))
 
 
+def train_shakespeare():
+    """Train the tokenizer on the shakespeare dataset."""
+    train_text = Path("tinyshakespeare.txt").read_text()
+    tokenizer = Tokenizer.train(train_text, target_vocab_size=500)
+    tokenizer.save(Path("tokenizer"))
+    test_text = "hello world!!!? (안녕하세요!) ZOINK ✅"
+    ids = tokenizer.encode(test_text)
+
+    t2 = Tokenizer.load(Path("tokenizer"))
+    assert t2.decode(ids) == test_text
+    assert t2.encode(test_text) == ids
+
+
 if __name__ == "__main__":
-    compare_tiktoken()
+    train_shakespeare()
