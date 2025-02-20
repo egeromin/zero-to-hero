@@ -61,8 +61,11 @@ def load_dataset(
         stoi: mapping of str to int
     """
     if not Path("train_x.pt").exists():
+        print("Reading corpus...")
         corpus = Path("tinyshakespeare.txt").read_text()
+        print("Encoding corpus...")
         tokens = tokenizer.encode(corpus)
+        print("Done encoding corpus.")
         num_training_samples = len(tokens) - context_size
         X = torch.zeros((num_training_samples, context_size), dtype=torch.long)
         Y = torch.zeros((num_training_samples, context_size), dtype=torch.long)
