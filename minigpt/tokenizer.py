@@ -292,7 +292,7 @@ def compare_tiktoken():
 def train_shakespeare():
     """Train the tokenizer on the shakespeare dataset."""
     train_text = Path("tinyshakespeare.txt").read_text()
-    tokenizer = Tokenizer.train(train_text, target_vocab_size=500)
+    tokenizer = Tokenizer.train(train_text, target_vocab_size=10000)
     tokenizer.save(Path("tokenizer"))
     test_text = "hello world!!!? (안녕하세요!) ZOINK ✅"
     ids = tokenizer.encode(test_text)
