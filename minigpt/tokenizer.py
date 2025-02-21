@@ -34,12 +34,14 @@ class Tokenizer:
     def __init__(
         self,
         merges: list[tuple[int, tuple[int, int]]],
-        vocab: Mapping[int, bytes],
+        vocab: dict[int, bytes],
         byte_mapping: Mapping[int, int],
+        special_tokens: dict[str, int] | None = None,
     ):
         self.merges = merges
         self.vocab = vocab
         self.byte_mapping = byte_mapping
+        self.special_tokens = special_tokens or {}
 
     @property
     def vocab_size(self) -> int:
@@ -53,13 +55,15 @@ class Tokenizer:
         (target_dir / "merges.json").write_text(json.dumps(self.merges))
         (target_dir / "vocab.bin").write_bytes(pickle.dumps(self.vocab))
         (target_dir / "byte_mapping.bin").write_bytes(pickle.dumps(self.byte_mapping))
+        (target_dir / "special_tokens.json").write_text(json.dumps(self.special_tokens))
 
     @classmethod
     def load(cls, model_dir: Path):
         merges = json.loads((model_dir / "merges.json").read_text())
         vocab = pickle.loads((model_dir / "vocab.bin").read_bytes())
         byte_mapping = pickle.loads((model_dir / "byte_mapping.bin").read_bytes())
-        return cls(merges, vocab, byte_mapping)
+        special_tokens = json.loads((model_dir / "special_tokens.json").read_text())
+        return cls(merges, vocab, byte_mapping, special_tokens)
 
     @classmethod
     def train(cls, input_text: str, target_vocab_size: int):
@@ -202,19 +206,47 @@ class Tokenizer:
     def encode(self, text: str, verbose: bool = False) -> list[int]:
         if verbose:
             print("Encoding. Finding chunks...")
-        text_chunks = self.pat.findall(text)
+        # Split the text into chunks. First, split by special tokens.
+        if self.special_tokens:
+            escaped_candidates = [regex.escape(c) for c in self.special_tokens]
+            special_pattern_str = r"(" + "|".join(escaped_candidates) + r")"
+            special_pattern = regex.compile(special_pattern_str)
+            chunk_by_special = special_pattern.split(text)
+        else:
+            chunk_by_special = [text]
+
+        # Now, split using the GPT-4 pattern, the usual way
+        text_chunks = []
+        for special_chunk in chunk_by_special:
+            if special_chunk:
+                if special_chunk in self.special_tokens:
+                    # Unless it's a special token, in which case, replace it.
+                    text_chunks.append(special_chunk)
+                else:
+                    text_chunks.extend(self.pat.findall(special_chunk))
         if verbose:
             print("Done finding chunks.")
         tokens = []
         if verbose:
             text_chunks = tqdm(text_chunks)
         for chunk in text_chunks:
-            tokens.extend(self.encode_chunk(chunk))
+            if chunk in self.special_tokens:
+                tokens.append(self.special_tokens[chunk])
+            else:
+                tokens.extend(self.encode_chunk(chunk))
         return tokens
 
     def decode(self, tokens: list[int]) -> str:
         token_bytes = b"".join(self.vocab[token] for token in tokens)
         return token_bytes.decode("utf-8", errors="replace")
+
+    def add_token(self, token_str: str):
+        if token_str in self.special_tokens:
+            print(f"Token {token_str} already added, nothing to do.")
+            return
+
+        self.special_tokens[token_str] = self.vocab_size
+        self.vocab[self.vocab_size] = token_str.encode("utf-8")
 
 
 def try_sentencepiece():
