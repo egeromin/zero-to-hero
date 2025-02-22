@@ -41,14 +41,8 @@ def fine_tune_model():
     for param in model.parameters():
         param.requires_grad = False
 
-    # Augment the model. To use the existing modules, we can augment the
-    # softmax by having a separate one-neuron output linear layer, which
-    # maps to the logit for the new token. And then concatenate the logits,
-    # before the softmax.
-    # For the initial embedding, this does not work.
-    # In both cases, we'd like an API for freezing part of the embedding
-    # and part of the last linear layer.
-    # A good solution seems to be *hooks* on tensors, which allow us to
+    # Add the new tokens to the first and last layer. In order to keep existing embeddings fixed,
+    # a good solution seems to be *hooks* on tensors, which allow us to
     # run a hook on the gradient, after .`backward()` for a specific layer
     # has been called. In our case, we can use the hook to zero-out specific
     # parts of the tensor gradient.
@@ -59,7 +53,8 @@ def fine_tune_model():
     old_vocab_size = model.vocab_size
     new_vocab_size = model.vocab_size + num_tokens_to_add
 
-    # Copy over the embedding weights and register a hook for them.
+    # Copy over the embedding weights and register a hook for them,
+    # since we want to keep the embeddings for the existing token fixed.
     new_embedding = nn.Embedding(new_vocab_size, model.embedding_size)
     with torch.no_grad():
         nn.init.normal_(new_embedding.weight, mean=0.0, std=0.02)
@@ -73,18 +68,12 @@ def fine_tune_model():
     new_embedding.weight.register_hook(_embedding_hook)
     model.embedding = new_embedding
 
-    # Same for the final linear layer
+    # For the linear model - fine tune the whole layer.
     new_linear = nn.Linear(model.embedding_size, new_vocab_size, bias=False)
     with torch.no_grad():
         nn.init.normal_(new_linear.weight, mean=0.0, std=0.02)
         new_linear.weight[:old_vocab_size] = model.linear.weight
 
-    def _linear_hook(grad):
-        new_grad = grad.clone()
-        new_grad[:, :old_vocab_size] = 0
-        return new_grad
-
-    new_linear.weight.register_hook(_linear_hook)
     model.linear = new_linear
 
     # Update the model vocab size
@@ -92,6 +81,7 @@ def fine_tune_model():
 
     # Finally, fine tune.
     params_to_train = [p for p in model.parameters() if p.requires_grad]
+    print(f"Fine-tuning on {len(params_to_train)} parameters.")
     opt = AdamW(params_to_train, lr=3e-4)
 
     X, Y = load_dataset(
