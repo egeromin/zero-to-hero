@@ -38,7 +38,9 @@ class Tokenizer:
         byte_mapping: Mapping[int, int],
         special_tokens: dict[str, int] | None = None,
     ):
-        self.merges = merges
+        # To ensure ordering, we require `merges` as a list.
+        self.merges = {a: tuple(b) for a, b in merges}
+        self.merges_inverted = {tuple(b): a for a, b in merges}
         self.vocab = vocab
         self.byte_mapping = byte_mapping
         self.special_tokens = special_tokens or {}
@@ -52,7 +54,8 @@ class Tokenizer:
             target_dir.mkdir()
         elif not target_dir.is_dir():
             raise RuntimeError(f"{str(target_dir)} exists and is not a directory")
-        (target_dir / "merges.json").write_text(json.dumps(self.merges))
+        merges_ordered = list(self.merges.items())
+        (target_dir / "merges.json").write_text(json.dumps(merges_ordered))
         (target_dir / "vocab.bin").write_bytes(pickle.dumps(self.vocab))
         (target_dir / "byte_mapping.bin").write_bytes(pickle.dumps(self.byte_mapping))
         (target_dir / "special_tokens.json").write_text(json.dumps(self.special_tokens))
@@ -199,8 +202,24 @@ class Tokenizer:
 
     def encode_chunk(self, text_chunk: str) -> list[int]:
         tokens = [self.byte_mapping[b] for b in text_chunk.encode("utf-8")]
-        for token, original_pair in self.merges:
-            tokens = self._substitute(tokens, list(original_pair), [token])
+        # A naive approach would be to iterate through all of the pairs in
+        # `merges` and replace tokens one by one. However, this is inefficient,
+        # for a large vocabulary. So, instead, given that chunks are short,
+        # we can restrict ourselves to iterate through the pairs that actually
+        # occur in that chunk.
+        while len(tokens) > 1:
+            current_pairs = self._get_pair_counts(tokens).keys()
+            mergeable_pairs = list(
+                filter(lambda pair: pair in self.merges_inverted, current_pairs)
+            )
+            if not mergeable_pairs:
+                # Already merged everything we can.
+                break
+            lowest_rank_pair = min(
+                mergeable_pairs, key=lambda pair: self.merges_inverted[pair]
+            )
+            merge_token = self.merges_inverted[lowest_rank_pair]
+            tokens = self._substitute(tokens, list(lowest_rank_pair), [merge_token])
         return tokens
 
     def encode(self, text: str, verbose: bool = False) -> list[int]:
@@ -333,8 +352,8 @@ def compare_tiktoken():
 
 def train_shakespeare():
     """Train the tokenizer on the shakespeare dataset."""
-    train_text = Path("blogpost.txt").read_text()
-    tokenizer = Tokenizer.train(train_text, target_vocab_size=500)
+    train_text = Path("tinyshakespeare.txt").read_text()
+    tokenizer = Tokenizer.train(train_text, target_vocab_size=10000)
     tokenizer.save(Path("tokenizer"))
     test_text = "hello world!!!? (안녕하세요!) ZOINK ✅"
     ids = tokenizer.encode(test_text, verbose=True)
@@ -344,5 +363,16 @@ def train_shakespeare():
     assert t2.encode(test_text) == ids
 
 
+def encode_shakespeare():
+    """How long does it take to encode the full shakespeare dataset?"""
+    tokenizer = Tokenizer.load(Path("tokenizer"))
+    text = Path("tinyshakespeare.txt").read_text()
+    ids = tokenizer.encode(text, verbose=True)
+    print("Done encoding")
+    decoded = tokenizer.decode(ids)
+    print("Done decoding")
+    assert decoded == text
+
+
 if __name__ == "__main__":
-    train_shakespeare()
+    encode_shakespeare()
