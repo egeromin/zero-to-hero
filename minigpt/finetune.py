@@ -6,8 +6,9 @@ from pathlib import Path
 
 import torch
 from torch import nn
+from torch.optim import AdamW
 
-from minigpt import MiniGPT
+from minigpt import MiniGPT, load_dataset, train, sample_from_model
 from tokenizer import Tokenizer
 
 
@@ -34,6 +35,7 @@ def fine_tune_model():
     tokens_to_add = ["<|endoftext|>"]
     for token_str in tokens_to_add:
         tokenizer.add_token(token_str)
+    tokenizer.save(Path("tokenizer"))
 
     # Freeze the existing parameters of the model
     for param in model.parameters():
@@ -89,8 +91,30 @@ def fine_tune_model():
     model.vocab_size = new_vocab_size
 
     # Finally, fine tune.
-    # TODO: implement training loop and ensure optimizer updates only
-    # the model params with requires_grad = True.
+    params_to_train = [p for p in model.parameters() if p.requires_grad]
+    opt = AdamW(params_to_train, lr=3e-4)
+
+    X, Y = load_dataset(
+        context_size=context_size,
+        tokenizer=tokenizer,
+        path_corpus=Path("finetuning-corpus.txt"),
+        cache_path=Path("dataset_caches/finetuning"),
+    )
+
+    max_training_iterations = 100
+    model = train(model, X, Y, opt, max_training_iterations)
+
+    model.eval()
+    sampled_tokens = sample_from_model(
+        model,
+        context_size=model.context_size,
+        num_chars=10000,
+        vocab_size=model.vocab_size,
+    )
+    sample = tokenizer.decode(sampled_tokens)
+    print(sample[:1000])
+    Path("generated-sample-finetuned.txt").write_text(sample)
+    torch.save(model.state_dict(), "model-minigpt.pth")
 
 
 if __name__ == "__main__":

@@ -1,5 +1,4 @@
-train_x.pt
-train_y.pt
+dataset_caches/
 stoi.json
 tok500.*
 __pycache__/

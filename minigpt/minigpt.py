@@ -49,7 +49,10 @@ if device == "cuda":
 
 
 def load_dataset(
-    context_size: int, tokenizer: Tokenizer
+    context_size: int,
+    tokenizer: Tokenizer,
+    path_corpus: Path,
+    cache_path: Path | None = None,
 ) -> tuple[Mapping[str, torch.Tensor], Mapping[str, torch.Tensor]]:
     """
     Returns a tensor of X's, Y's, already prepared for training,
@@ -60,9 +63,13 @@ def load_dataset(
         Y: output labels
         stoi: mapping of str to int
     """
-    if not Path("train_x.pt").exists():
+    if cache_path and (cache_path / "train_x.pt").exists():
+        print("Loading cached dataset.")
+        X = torch.load(cache_path / "train_x.pt")
+        Y = torch.load(cache_path / "train_y.pt")
+    else:
         print("Reading corpus...")
-        corpus = Path("tinyshakespeare.txt").read_text()
+        corpus = path_corpus.read_text()
         print("Encoding corpus...")
         tokens = tokenizer.encode(corpus, verbose=True)
         print("Done encoding corpus.")
@@ -76,12 +83,10 @@ def load_dataset(
             Y[i, :] = torch.tensor(output_ctx, dtype=torch.long)
 
         print("Saving processed dataset to cache")
-        torch.save(X, "train_x.pt")
-        torch.save(Y, "train_y.pt")
-    else:
-        print("Loading cached dataset.")
-        X = torch.load("train_x.pt")
-        Y = torch.load("train_y.pt")
+        if cache_path:
+            cache_path.mkdir(exist_ok=True, parents=True)
+            torch.save(X, cache_path / "train_x.pt")
+            torch.save(Y, cache_path / "train_y.pt")
 
     # Shuffle input data and get train/val split
     perm = torch.randperm(len(X))
@@ -349,7 +354,12 @@ def main():
     print("Loading dataset...")
     context_size = 256
     tokenizer = Tokenizer.load(Path("tokenizer"))
-    X, Y = load_dataset(context_size=context_size, tokenizer=tokenizer)
+    X, Y = load_dataset(
+        context_size=context_size,
+        tokenizer=tokenizer,
+        path_corpus=Path("tinyshakespeare.txt"),
+        cache_path=Path("dataset_caches/training"),
+    )
     print(
         f"Done loading dataset. Train size = {len(X['train'])}, val size = {len(X['val'])}"
     )
@@ -365,14 +375,37 @@ def main():
         num_blocks=6,
         use_flash_attention=True,
     )
+
+    opt = AdamW(model.parameters(), lr=3e-4)
+    max_training_iterations = 12_001
+    model = train(model, X, Y, opt, max_training_iterations)
+
+    model.eval()
+    sampled_tokens = sample_from_model(
+        model,
+        context_size=model.context_size,
+        num_chars=10000,
+        vocab_size=model.vocab_size,
+    )
+    sample = tokenizer.decode(sampled_tokens)
+    print(sample[:1000])
+    Path("generated-sample.txt").write_text(sample)
+    torch.save(model.state_dict(), "model-minigpt.pth")
+
+
+def train(
+    model: MiniGPT,
+    X: Mapping[str, torch.Tensor],
+    Y: Mapping[str, torch.Tensor],
+    opt: torch.optim.Optimizer,
+    max_training_iterations: int,
+):
     # Move the model to GPU. For nn.Module, .to(device) modifies in-place
     model.to(device)
     model.train()
     total_params = sum(p.numel() for p in model.parameters())
     print(f"Number of parameters: {total_params // 1e6}M parameters")
-    max_training_iterations = 12_001
     batch_size = 64
-    opt = AdamW(model.parameters(), lr=3e-4)
 
     train_losses = []
     validation_losses = []
@@ -382,13 +415,13 @@ def main():
         perm = torch.randperm(len(X["train"]))[:batch_size]
         X_batch = X["train"][perm]
         Y_batch = Y["train"][perm]
-        assert tuple(Y_batch.shape) == (batch_size, context_size)
+        assert tuple(Y_batch.shape) == (batch_size, model.context_size)
         opt.zero_grad()
         logits = model.forward(X_batch)
         # Calculate the loss for each of the tokens in the input
         loss = F.cross_entropy(
-            logits.view(batch_size * context_size, vocab_size),
-            Y_batch.view(batch_size * context_size),
+            logits.view(batch_size * model.context_size, model.vocab_size),
+            Y_batch.view(batch_size * model.context_size),
         )
         loss.backward()
         opt.step()
@@ -399,15 +432,15 @@ def main():
                 model,
                 X["train"],
                 Y["train"],
-                context_size=context_size,
-                vocab_size=vocab_size,
+                context_size=model.context_size,
+                vocab_size=model.vocab_size,
             )
             val_loss_estimate, val_accuracy_estimate = estimate_loss_and_accuracy(
                 model,
                 X["val"],
                 Y["val"],
-                context_size=context_size,
-                vocab_size=vocab_size,
+                context_size=model.context_size,
+                vocab_size=model.vocab_size,
             )
             train_losses.append(train_loss_estimate)
             validation_losses.append(val_loss_estimate)
@@ -419,17 +452,6 @@ def main():
             model.train()
 
     print(f"Number of parameters: {total_params // 1e6}M parameters")
-    model.eval()
-    sampled_tokens = sample_from_model(
-        model,
-        context_size=context_size,
-        num_chars=10000,
-        vocab_size=vocab_size,
-    )
-    sample = tokenizer.decode(sampled_tokens)
-    print(sample[:1000])
-    Path("generated-sample.txt").write_text(sample)
-
     # Plot training and validation losses
     fig, axes = plt.subplots(nrows=2, ncols=1, figsize=(4, 8))
     train_losses_log10 = [math.log10(e) for e in train_losses]
@@ -449,8 +471,7 @@ def main():
         plt.show()
     else:
         plt.savefig("training-plots.png", dpi=300)
-
-    torch.save(model.state_dict(), "model-minigpt.pth")
+    return model
 
 
 if __name__ == "__main__":
