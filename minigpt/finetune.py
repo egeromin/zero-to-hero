@@ -69,10 +69,11 @@ def fine_tune_model():
     model.embedding = new_embedding
 
     # For the linear model - fine tune the whole layer.
-    new_linear = nn.Linear(model.embedding_size, new_vocab_size, bias=False)
+    new_linear = nn.Linear(model.embedding_size, new_vocab_size)
     with torch.no_grad():
         nn.init.normal_(new_linear.weight, mean=0.0, std=0.02)
         new_linear.weight[:old_vocab_size] = model.linear.weight
+        new_linear.bias[:old_vocab_size] = model.linear.bias
 
     model.linear = new_linear
 
