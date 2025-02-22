@@ -373,6 +373,14 @@ def encode_shakespeare():
     print("Done decoding")
     assert decoded == text
 
+    # Test adding a new token to the vocabulary.
+    token_str = "<|endoftext|>"
+    test_str = "Testing with " + token_str + " surrounded by extra text."
+    print(tokenizer.encode(test_str))
+    tokenizer.add_token(token_str)
+    print(enc := tokenizer.encode(test_str))
+    print(tokenizer.decode(enc))
+
 
 if __name__ == "__main__":
     encode_shakespeare()
