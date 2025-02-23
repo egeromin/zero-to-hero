@@ -279,6 +279,8 @@ class MiniGPT(torch.nn.Module):
         num_blocks: int,
         use_flash_attention: bool = False,
         attention_bias: bool = False,
+        final_layer_bias: bool = True,
+        final_layer_norm: bool = False,
     ):
         super().__init__()
         self.vocab_size = vocab_size
@@ -302,7 +304,11 @@ class MiniGPT(torch.nn.Module):
                 for _ in range(num_blocks)
             ]
         )
-        self.linear = nn.Linear(embedding_size, vocab_size)
+        if final_layer_norm:
+            self.final_layer_norm = nn.LayerNorm(embedding_size)
+        else:
+            self.final_layer_norm = nn.Identity()
+        self.linear = nn.Linear(embedding_size, vocab_size, bias=final_layer_bias)
         self.register_buffer(
             "positions", torch.tensor(range(self.context_size), dtype=torch.long)
         )
@@ -323,7 +329,7 @@ class MiniGPT(torch.nn.Module):
         pos = self.positional_encoding.forward(self.positions)
         drop = self.dropout(emb + pos)
         sa = self.attention_blocks(drop)
-        out = self.linear(sa)
+        out = self.linear(self.final_layer_norm(sa))
         assert tuple(out.shape) == (B, C, self.vocab_size)
         return out
 
