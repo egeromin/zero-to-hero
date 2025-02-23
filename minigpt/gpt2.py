@@ -149,7 +149,9 @@ def main():
     start_ctx = tokenizer.encode("I'm a language model,")
 
     # Check the logits for the forward pass.
-    padded_ctx = torch.tensor([start_ctx + [0] * (context_size - len(start_ctx))], dtype=torch.long)
+    padded_ctx = torch.tensor(
+        [start_ctx + [0] * (context_size - len(start_ctx))], dtype=torch.long
+    )
     _logits_1 = hf_gpt2.forward(padded_ctx)
     _logits_2 = model.forward(padded_ctx)
 
