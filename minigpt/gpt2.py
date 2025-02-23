@@ -152,8 +152,9 @@ def main():
     padded_ctx = torch.tensor(
         [start_ctx + [0] * (context_size - len(start_ctx))], dtype=torch.long
     )
-    _logits_1 = hf_gpt2.forward(padded_ctx)
-    _logits_2 = model.forward(padded_ctx)
+    logits_1 = hf_gpt2.forward(padded_ctx).logits
+    logits_2 = model.forward(padded_ctx)
+    assert torch.allclose(logits_1, logits_2)
 
     tokens = []
     tokens.extend(start_ctx)
