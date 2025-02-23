@@ -219,16 +219,27 @@ class MultiHeadSelfAttention(nn.Module):
         return output
 
 
+# "new gelu" activation, copied from huggingface code.
+class NewGELUActivation(nn.Module):
+    """
+    Implementation of the GELU activation function currently in Google BERT repo (identical to OpenAI GPT). Also see
+    the Gaussian Error Linear Units paper: https://arxiv.org/abs/1606.08415
+    """
+
+    def forward(self, input: torch.Tensor) -> torch.Tensor:
+        return 0.5 * input * (1.0 + torch.tanh(math.sqrt(2.0 / math.pi) * (input + 0.044715 * torch.pow(input, 3.0))))
+
+
 class FeedForward(nn.Module):
-    def __init__(self, embedding_size: int):
+    def __init__(self, embedding_size: int, use_gelu: bool = False):
         super().__init__()
         self.linear_1 = nn.Linear(embedding_size, 4 * embedding_size)
-        self.relu = nn.ReLU()
+        self.act = NewGELUActivation() if use_gelu else nn.ReLU()
         self.linear_2 = nn.Linear(4 * embedding_size, embedding_size)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         l1 = self.linear_1(x)
-        rl = self.relu(l1)
+        rl = self.act(l1)
         return self.linear_2(rl)
 
 
@@ -241,6 +252,7 @@ class AttentionBlock(nn.Module):
         num_heads: int,
         use_flash_attention: bool = False,
         bias: bool = False,
+        ffw_use_gelu: bool = False,
     ):
         super().__init__()
         self.embedding_size = embedding_size
@@ -258,12 +270,16 @@ class AttentionBlock(nn.Module):
         )
         self.drop_1 = nn.Dropout(p=DROPOUT)
         self.norm_2 = nn.LayerNorm(embedding_size)
-        self.feed_forward = FeedForward(embedding_size)
+        self.feed_forward = FeedForward(embedding_size, use_gelu=ffw_use_gelu)
         self.drop_2 = nn.Dropout(p=DROPOUT)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        multi = self.drop_1(self.multi_head_attention(self.norm_1(x))) + x
-        output = self.drop_2(self.feed_forward(self.norm_2(multi))) + multi
+        n1 = self.norm_1(x)
+        mah = self.multi_head_attention(n1)
+        multi = self.drop_1(mah) + x
+        n2 = self.norm_2(multi)
+        ffw = self.feed_forward(n2)
+        output = self.drop_2(ffw) + multi
         assert output.shape == x.shape
         return output
 
@@ -281,6 +297,7 @@ class MiniGPT(torch.nn.Module):
         attention_bias: bool = False,
         final_layer_bias: bool = True,
         final_layer_norm: bool = False,
+        ffw_use_gelu: bool = False,
     ):
         super().__init__()
         self.vocab_size = vocab_size
@@ -300,6 +317,7 @@ class MiniGPT(torch.nn.Module):
                     num_heads=num_heads,
                     use_flash_attention=use_flash_attention,
                     bias=attention_bias,
+                    ffw_use_gelu=ffw_use_gelu,
                 )
                 for _ in range(num_blocks)
             ]
@@ -327,7 +345,8 @@ class MiniGPT(torch.nn.Module):
         B, C = x.shape
         emb = self.embedding.forward(x)
         pos = self.positional_encoding.forward(self.positions)
-        drop = self.dropout(emb + pos)
+        hidden_state = emb + pos
+        drop = self.dropout(hidden_state)
         sa = self.attention_blocks(drop)
         out = self.linear(self.final_layer_norm(sa))
         assert tuple(out.shape) == (B, C, self.vocab_size)

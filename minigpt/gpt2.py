@@ -64,8 +64,9 @@ def init_model_from_state_dict(model: MiniGPT, hp_gpt2_sd: dict) -> MiniGPT:
         _copy_weights(source_value_weight, block.multi_head_attention.values.weight)
         _copy_weights(source_value_bias, block.multi_head_attention.values.bias)
 
+        # Note the transpose
         _copy_weights(
-            hp_gpt2_sd[f"{prefix}.attn.c_proj.weight"],
+            hp_gpt2_sd[f"{prefix}.attn.c_proj.weight"].T,
             block.multi_head_attention.linear.weight,
         )
         _copy_weights(
@@ -114,6 +115,8 @@ def main():
     context_size = hf_gpt2.config.max_position_embeddings
     num_heads = hf_gpt2.config.num_attention_heads
     head_size = embedding_size // num_heads
+    num_blocks = hf_gpt2.config.num_hidden_layers
+    assert num_blocks == 12
 
     print(f"""Model parameters:
     vocab_size: {vocab_size}
@@ -127,13 +130,14 @@ def main():
         vocab_size=vocab_size,
         context_size=context_size,
         embedding_size=embedding_size,
-        num_blocks=11,
+        num_blocks=num_blocks,
         num_heads=num_heads,
         head_size=head_size,
         attention_bias=True,
         final_layer_bias=False,
         use_flash_attention=True,
         final_layer_norm=True,
+        ffw_use_gelu=True,
     )
 
     print("Initialized the model. Copying over pretrained weights...")
@@ -143,6 +147,11 @@ def main():
     tokenizer = GPT2TokenizerFast.from_pretrained("gpt2")
 
     start_ctx = tokenizer.encode("I'm a language model,")
+
+    # Check the logits for the forward pass.
+    padded_ctx = torch.tensor([start_ctx + [0] * (context_size - len(start_ctx))], dtype=torch.long)
+    _logits_1 = hf_gpt2.forward(padded_ctx)
+    _logits_2 = model.forward(padded_ctx)
 
     tokens = []
     tokens.extend(start_ctx)
