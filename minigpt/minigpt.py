@@ -156,19 +156,20 @@ class MultiHeadSelfAttention(nn.Module):
         context_size: int,
         num_heads: int,
         use_flash_attention: bool = False,
+        bias: bool = False,
     ):
         super().__init__()
         self.embedding_size = embedding_size
         self.head_size = head_size
         self.context_size = context_size
         self.num_heads = num_heads
-        self.keys = nn.Linear(embedding_size, head_size * num_heads, bias=False)
-        self.queries = nn.Linear(embedding_size, head_size * num_heads, bias=False)
-        self.values = nn.Linear(embedding_size, head_size * num_heads, bias=False)
+        self.keys = nn.Linear(embedding_size, head_size * num_heads, bias=bias)
+        self.queries = nn.Linear(embedding_size, head_size * num_heads, bias=bias)
+        self.values = nn.Linear(embedding_size, head_size * num_heads, bias=bias)
         self.use_flash_attention = use_flash_attention
 
         self.flatten = nn.Flatten(start_dim=2, end_dim=3)
-        self.linear = nn.Linear(head_size * num_heads, embedding_size, bias=False)
+        self.linear = nn.Linear(head_size * num_heads, embedding_size, bias=bias)
 
         # self-attention mask
         self.register_buffer(
@@ -239,6 +240,7 @@ class AttentionBlock(nn.Module):
         context_size: int,
         num_heads: int,
         use_flash_attention: bool = False,
+        bias: bool = False,
     ):
         super().__init__()
         self.embedding_size = embedding_size
@@ -252,6 +254,7 @@ class AttentionBlock(nn.Module):
             context_size=context_size,
             num_heads=num_heads,
             use_flash_attention=use_flash_attention,
+            bias=bias,
         )
         self.drop_1 = nn.Dropout(p=DROPOUT)
         self.norm_2 = nn.LayerNorm(embedding_size)
@@ -275,6 +278,7 @@ class MiniGPT(torch.nn.Module):
         num_heads: int,
         num_blocks: int,
         use_flash_attention: bool = False,
+        attention_bias: bool = False,
     ):
         super().__init__()
         self.vocab_size = vocab_size
@@ -293,6 +297,7 @@ class MiniGPT(torch.nn.Module):
                     context_size=context_size,
                     num_heads=num_heads,
                     use_flash_attention=use_flash_attention,
+                    bias=attention_bias,
                 )
                 for _ in range(num_blocks)
             ]
