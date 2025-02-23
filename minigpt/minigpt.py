@@ -28,7 +28,7 @@ To-do list:
 import math
 import sys
 from pathlib import Path
-from typing import Mapping
+from typing import Mapping, Iterable
 
 import torch
 import torch.nn.functional as F
@@ -339,8 +339,7 @@ def sample_from_model(
     context_size: int,
     num_chars: int,
     vocab_size: int,
-) -> list[int]:
-    generated_tokens: list[int] = []
+) -> Iterable[int]:
     current_ctx = [0] * context_size
     for _sample in range(num_chars):
         input = torch.tensor([current_ctx], dtype=torch.long).to(device)
@@ -349,11 +348,9 @@ def sample_from_model(
         logits_last_token = logits[:, -1, :]
         assert tuple(logits_last_token.shape) == (1, vocab_size)
         probs = F.softmax(logits_last_token, dim=1)
-        sample = torch.multinomial(probs, num_samples=1)
-        generated_tokens.append(sample.item())
-        current_ctx = current_ctx[1:] + [sample.item()]
-
-    return generated_tokens
+        sample = torch.multinomial(probs, num_samples=1).item()
+        yield sample
+        current_ctx = current_ctx[1:] + [sample]
 
 
 def main():
@@ -392,11 +389,13 @@ def main():
     model = train(model, X, Y, opt, max_training_iterations)
 
     model.eval()
-    sampled_tokens = sample_from_model(
-        model,
-        context_size=model.context_size,
-        num_chars=10000,
-        vocab_size=model.vocab_size,
+    sampled_tokens = list(
+        sample_from_model(
+            model,
+            context_size=model.context_size,
+            num_chars=10000,
+            vocab_size=model.vocab_size,
+        )
     )
     sample = tokenizer.decode(sampled_tokens)
     print(sample[:1000])

@@ -96,11 +96,13 @@ def fine_tune_model():
     model = train(model, X, Y, opt, max_training_iterations)
 
     model.eval()
-    sampled_tokens = sample_from_model(
-        model,
-        context_size=model.context_size,
-        num_chars=10000,
-        vocab_size=model.vocab_size,
+    sampled_tokens = list(
+        sample_from_model(
+            model,
+            context_size=model.context_size,
+            num_chars=10000,
+            vocab_size=model.vocab_size,
+        )
     )
     sample = tokenizer.decode(sampled_tokens)
     print(sample[:1000])

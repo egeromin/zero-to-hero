@@ -9,9 +9,9 @@ Tasks:
 """
 
 import torch
-from transformers import pipeline, set_seed, GPT2LMHeadModel
+from transformers import pipeline, set_seed, GPT2LMHeadModel, GPT2TokenizerFast
 
-from minigpt import MiniGPT, AttentionBlock
+from minigpt import MiniGPT, AttentionBlock, sample_from_model
 
 
 def generate_samples():
@@ -25,42 +25,7 @@ def generate_samples():
         print("--------------------------------------------------------")
 
 
-def main():
-    hf_gpt2 = GPT2LMHeadModel.from_pretrained("gpt2")
-    hp_gpt2_sd = hf_gpt2.state_dict()
-    for k, v in hp_gpt2_sd.items():
-        print(f"{k}: {tuple(v.shape)}")
-
-    assert hf_gpt2.config.n_embd == hf_gpt2.config.hidden_size
-    vocab_size = hf_gpt2.config.vocab_size
-    embedding_size = hf_gpt2.config.n_embd
-    context_size = hf_gpt2.config.max_position_embeddings
-    num_heads = hf_gpt2.config.num_attention_heads
-    head_size = embedding_size // num_heads
-
-    print(f"""Model parameters:
-    vocab_size: {vocab_size}
-    embedding_size: {embedding_size}
-    context_size: {context_size}
-    num_heads: {num_heads}
-    head_size: {head_size}
-    """)
-
-    model = MiniGPT(
-        vocab_size=vocab_size,
-        context_size=context_size,
-        embedding_size=embedding_size,
-        num_blocks=11,
-        num_heads=num_heads,
-        head_size=head_size,
-        attention_bias=True,
-        final_layer_bias=False,
-        use_flash_attention=True,
-        final_layer_norm=True,
-    )
-
-    print("Initialized the model. Copying over pretrained weights...")
-
+def init_model_from_state_dict(model: MiniGPT, hp_gpt2_sd: dict) -> MiniGPT:
     @torch.no_grad()
     def _copy_weights(source_tensor, target_tensor):
         target_tensor.copy_(source_tensor)
@@ -85,10 +50,10 @@ def main():
         # into a single tensor. Original code unpacking these:
         # query_states, key_states, value_states = self.c_attn(hidden_states).split(self.split_size, dim=2)
         source_query_weight, source_key_weight, source_value_weight = (
-            source_attn_weight.split(embedding_size, dim=0)
+            source_attn_weight.split(model.embedding_size, dim=0)
         )
         source_query_bias, source_key_bias, source_value_bias = source_attn_bias.split(
-            embedding_size
+            model.embedding_size
         )
         _copy_weights(source_query_weight, block.multi_head_attention.queries.weight)
         _copy_weights(source_query_bias, block.multi_head_attention.queries.bias)
@@ -132,6 +97,51 @@ def main():
     _copy_weights(hp_gpt2_sd["transformer.ln_f.bias"], model.final_layer_norm.bias)
 
     _copy_weights(hp_gpt2_sd["lm_head.weight"], model.linear.weight)
+    return model
+
+
+def main():
+    hf_gpt2 = GPT2LMHeadModel.from_pretrained("gpt2")
+    hp_gpt2_sd = hf_gpt2.state_dict()
+    for k, v in hp_gpt2_sd.items():
+        print(f"{k}: {tuple(v.shape)}")
+
+    assert hf_gpt2.config.n_embd == hf_gpt2.config.hidden_size
+    vocab_size = hf_gpt2.config.vocab_size
+    embedding_size = hf_gpt2.config.n_embd
+    context_size = hf_gpt2.config.max_position_embeddings
+    num_heads = hf_gpt2.config.num_attention_heads
+    head_size = embedding_size // num_heads
+
+    print(f"""Model parameters:
+    vocab_size: {vocab_size}
+    embedding_size: {embedding_size}
+    context_size: {context_size}
+    num_heads: {num_heads}
+    head_size: {head_size}
+    """)
+
+    model = MiniGPT(
+        vocab_size=vocab_size,
+        context_size=context_size,
+        embedding_size=embedding_size,
+        num_blocks=11,
+        num_heads=num_heads,
+        head_size=head_size,
+        attention_bias=True,
+        final_layer_bias=False,
+        use_flash_attention=True,
+        final_layer_norm=True,
+    )
+
+    print("Initialized the model. Copying over pretrained weights...")
+    model = init_model_from_state_dict(model, hp_gpt2_sd)
+
+    tokenizer = GPT2TokenizerFast.from_pretrained("gpt2")
+
+    tokens = list(sample_from_model(model, context_size, 100, vocab_size))
+    generated = tokenizer.decode(tokens, skip_special_tokens=True)
+    print(f"Generated: {generated}")
 
 
 if __name__ == "__main__":
