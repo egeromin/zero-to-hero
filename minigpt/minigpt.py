@@ -339,18 +339,22 @@ def sample_from_model(
     context_size: int,
     num_chars: int,
     vocab_size: int,
+    start_ctx: list[int] | None = None
 ) -> Iterable[int]:
-    current_ctx = [0] * context_size
+    current_ctx = start_ctx or []
     for _sample in range(num_chars):
-        input = torch.tensor([current_ctx], dtype=torch.long).to(device)
+        current_ctx = current_ctx[-context_size:]
+        padded_ctx = current_ctx + [0] * (context_size - len(current_ctx))
+        last_token_idx = len(current_ctx) - 1
+        input = torch.tensor([padded_ctx], dtype=torch.long).to(device)
         logits = model.forward(input)
         assert tuple(logits.shape) == (1, context_size, vocab_size)
-        logits_last_token = logits[:, -1, :]
+        logits_last_token = logits[:, last_token_idx, :]
         assert tuple(logits_last_token.shape) == (1, vocab_size)
         probs = F.softmax(logits_last_token, dim=1)
         sample = torch.multinomial(probs, num_samples=1).item()
         yield sample
-        current_ctx = current_ctx[1:] + [sample]
+        current_ctx.append(sample)
 
 
 def main():

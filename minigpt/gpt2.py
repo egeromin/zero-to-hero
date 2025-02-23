@@ -136,10 +136,12 @@ def main():
 
     print("Initialized the model. Copying over pretrained weights...")
     model = init_model_from_state_dict(model, hp_gpt2_sd)
+    model.eval()
 
     tokenizer = GPT2TokenizerFast.from_pretrained("gpt2")
 
-    tokens = list(sample_from_model(model, context_size, 100, vocab_size))
+    start_ctx = tokenizer.encode("I'm a language model,")
+    tokens = list(sample_from_model(model, context_size, 100, vocab_size, start_ctx=start_ctx))
     generated = tokenizer.decode(tokens, skip_special_tokens=True)
     print(f"Generated: {generated}")
 
