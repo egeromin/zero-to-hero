@@ -148,23 +148,12 @@ def main():
     tokens = []
     tokens.extend(start_ctx)
 
-    # In a side thread, print the generated tokens, as they are being generated.
-    def _print_tokens():
-        written_text = ""
-        while tokens and tokens[-1] != -1:
-            decoded = tokenizer.decode(tokens, skip_special_tokens=True)
-            sys.stdout.write(decoded[len(written_text):])
-            written_text = decoded
-            time.sleep(0.5)
-
-    thread = threading.Thread(target=_print_tokens)
-    thread.start()
-
+    written_text = ""
     for token in sample_from_model(model, context_size, 100, vocab_size, start_ctx=start_ctx):
         tokens.append(token)
-
-    tokens.append(-1)  # end of stream sentinel.
-    thread.join(timeout=5.0)
+        decoded = tokenizer.decode(tokens, skip_special_tokens=True)
+        sys.stdout.write(decoded[len(written_text):])
+        written_text = decoded
 
 
 if __name__ == "__main__":
