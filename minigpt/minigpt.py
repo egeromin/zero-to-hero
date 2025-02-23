@@ -274,12 +274,8 @@ class AttentionBlock(nn.Module):
         self.drop_2 = nn.Dropout(p=DROPOUT)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        n1 = self.norm_1(x)
-        mah = self.multi_head_attention(n1)
-        multi = self.drop_1(mah) + x
-        n2 = self.norm_2(multi)
-        ffw = self.feed_forward(n2)
-        output = self.drop_2(ffw) + multi
+        multi = self.drop_1(self.multi_head_attention(self.norm_1(x))) + x
+        output = self.drop_2(self.feed_forward(self.norm_2(multi))) + multi
         assert output.shape == x.shape
         return output
 
