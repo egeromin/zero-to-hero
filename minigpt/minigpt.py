@@ -339,7 +339,7 @@ def sample_from_model(
     context_size: int,
     num_chars: int,
     vocab_size: int,
-    start_ctx: list[int] | None = None
+    start_ctx: list[int] | None = None,
 ) -> Iterable[int]:
     current_ctx = start_ctx or []
     for _sample in range(num_chars):

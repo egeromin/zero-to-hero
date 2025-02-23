@@ -7,9 +7,8 @@ Tasks:
 2. Re-implement GPT2 using the MiniGPT class, load the pretrained weights and reproduce the samples,
    ensuring that they're consistent.
 """
+
 import sys
-import threading
-import time
 
 import torch
 from transformers import pipeline, set_seed, GPT2LMHeadModel, GPT2TokenizerFast
@@ -149,10 +148,12 @@ def main():
     tokens.extend(start_ctx)
 
     written_text = ""
-    for token in sample_from_model(model, context_size, 100, vocab_size, start_ctx=start_ctx):
+    for token in sample_from_model(
+        model, context_size, 100, vocab_size, start_ctx=start_ctx
+    ):
         tokens.append(token)
         decoded = tokenizer.decode(tokens, skip_special_tokens=True)
-        sys.stdout.write(decoded[len(written_text):])
+        sys.stdout.write(decoded[len(written_text) :])
         written_text = decoded
 
 
