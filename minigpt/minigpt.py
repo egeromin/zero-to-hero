@@ -230,22 +230,11 @@ class MultiHeadSelfAttention(nn.Module):
         return output
 
 
-class NewGELUActivation(nn.Module):
-    """
-    Implementation of the GELU activation function currently in Google BERT repo (identical to OpenAI GPT). Also see
-    the Gaussian Error Linear Units paper: https://arxiv.org/abs/1606.08415
-    Copied over from the huggingface codebase.
-    """
-
-    def forward(self, input: torch.Tensor) -> torch.Tensor:
-        return 0.5 * input * (1.0 + torch.tanh(math.sqrt(2.0 / math.pi) * (input + 0.044715 * torch.pow(input, 3.0))))
-
-
 class FeedForward(nn.Module):
     def __init__(self, embedding_size: int, use_gelu: bool = False):
         super().__init__()
         self.linear_1 = nn.Linear(embedding_size, 4 * embedding_size)
-        self.act = NewGELUActivation() if use_gelu else nn.ReLU()
+        self.act = nn.GELU(approximate="tanh") if use_gelu else nn.ReLU()
         self.linear_2 = nn.Linear(4 * embedding_size, embedding_size)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
