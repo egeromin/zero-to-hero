@@ -186,7 +186,9 @@ class MultiHeadSelfAttention(nn.Module):
         B, C, E = x.shape
         assert E == self.config.embedding_size
         H = self.config.num_heads
-        queries, keys, values = self.attn_c.forward(x).split(self.config.head_size * H, dim=2)
+        queries, keys, values = self.attn_c.forward(x).split(
+            self.config.head_size * H, dim=2
+        )
         queries = queries.view(B, C, H, self.config.head_size).transpose(2, 1)
         keys = keys.view(B, C, H, self.config.head_size).transpose(2, 1)
         values = values.view(B, C, H, self.config.head_size).transpose(2, 1)

@@ -144,7 +144,9 @@ def main():
     model = init_model_from_state_dict(model, hp_gpt2_sd)
     print("Copied.")
 
-    print(f"Checking logits are the same for our model VS the huggingface implementation...")
+    print(
+        "Checking logits are the same for our model VS the huggingface implementation..."
+    )
     model.eval()
     tokenizer = GPT2TokenizerFast.from_pretrained("gpt2")
     start_ctx = tokenizer.encode("I'm a language model,")
@@ -154,16 +156,14 @@ def main():
     logits_1 = hf_gpt2.forward(start_ctx_encoded).logits
     logits_2 = model.forward(start_ctx_encoded)
     assert torch.allclose(logits_1, logits_2)
-    print(f"Check passed.")
+    print("Check passed.")
     print("Generating samples...")
 
     tokens = []
     tokens.extend(start_ctx)
 
     written_text = ""
-    for token in sample_from_model(
-        model, start_ctx=start_ctx, num_chars=100
-    ):
+    for token in sample_from_model(model, start_ctx=start_ctx, num_chars=100):
         tokens.append(token)
         decoded = tokenizer.decode(tokens, skip_special_tokens=True)
         sys.stdout.write(decoded[len(written_text) :])
