@@ -339,21 +339,17 @@ class MiniGPT(torch.nn.Module):
 
 def sample_from_model(
     model: MiniGPT,
-    context_size: int,
     num_chars: int,
-    vocab_size: int,
     start_ctx: list[int] | None = None,
 ) -> Iterable[int]:
     current_ctx = start_ctx or []
     for _sample in range(num_chars):
-        current_ctx = current_ctx[-context_size:]
-        padded_ctx = current_ctx + [0] * (context_size - len(current_ctx))
-        last_token_idx = len(current_ctx) - 1
-        input = torch.tensor([padded_ctx], dtype=torch.long).to(device)
+        current_ctx = current_ctx[-model.config.max_context_length :]
+        input = torch.tensor([current_ctx], dtype=torch.long).to(device)
         logits = model.forward(input)
-        assert tuple(logits.shape) == (1, context_size, vocab_size)
-        logits_last_token = logits[:, last_token_idx, :]
-        assert tuple(logits_last_token.shape) == (1, vocab_size)
+        assert tuple(logits.shape) == (1, len(current_ctx), model.config.vocab_size)
+        logits_last_token = logits[:, -1, :]
+        assert tuple(logits_last_token.shape) == (1, model.config.vocab_size)
         probs = F.softmax(logits_last_token, dim=1)
         sample = torch.multinomial(probs, num_samples=1).item()
         yield sample
@@ -399,9 +395,7 @@ def main():
     sampled_tokens = list(
         sample_from_model(
             model,
-            context_size=model.context_size,
             num_chars=10000,
-            vocab_size=model.vocab_size,
         )
     )
     sample = tokenizer.decode(sampled_tokens)
@@ -511,6 +505,17 @@ def test_works_after_refactor():
     input_context = torch.zeros((1, max_context_length // 2), dtype=torch.long)
     model.forward(input_context)
     print("OK, forward successful.")
+    prompt = "Hello!"
+    sampled_tokens = list(
+        sample_from_model(
+            model,
+            start_ctx=tokenizer.encode(prompt),
+            num_chars=5,
+        )
+    )
+    sample = tokenizer.decode(sampled_tokens)
+    print(prompt + sample)
+    print("OK, sampling successful.")
 
 
 if __name__ == "__main__":
