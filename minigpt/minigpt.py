@@ -207,10 +207,16 @@ class MultiHeadSelfAttention(nn.Module):
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         B, C, E = x.shape
         assert E == self.config.embedding_size
-        H = self.num_heads
-        keys = self.keys.forward(x).view(B, C, H, self.head_size).transpose(2, 1)
-        queries = self.queries.forward(x).view(B, C, H, self.head_size).transpose(2, 1)
-        values = self.values.forward(x).reshape(B, C, H, self.head_size).transpose(2, 1)
+        H = self.config.num_heads
+        keys = self.keys.forward(x).view(B, C, H, self.config.head_size).transpose(2, 1)
+        queries = (
+            self.queries.forward(x).view(B, C, H, self.config.head_size).transpose(2, 1)
+        )
+        values = (
+            self.values.forward(x)
+            .reshape(B, C, H, self.config.head_size)
+            .transpose(2, 1)
+        )
 
         assert (
             tuple(keys.shape)
@@ -230,15 +236,16 @@ class MultiHeadSelfAttention(nn.Module):
 
             # Mask the *upper half* since each query should not interact
             # with keys that come after it in the context.
-            masked_sa = torch.where(self.mask, -torch.inf, sa)
+            mask = ~torch.tril(torch.ones(C, C, dtype=torch.bool))
+            masked_sa = torch.where(mask, -torch.inf, sa)
             assert tuple(masked_sa.shape) == (B, H, C, C)
-            scale_factor = 1 / self.head_size**0.5
+            scale_factor = 1 / self.config.head_size**0.5
             norm_masked_sa = F.softmax(masked_sa * scale_factor, dim=3)
             assert tuple(norm_masked_sa.shape) == (B, H, C, C)
 
             after_attention = norm_masked_sa @ values
 
-        assert tuple(after_attention.shape) == (B, H, C, self.head_size)
+        assert tuple(after_attention.shape) == (B, H, C, self.config.head_size)
 
         stacked = after_attention.transpose(2, 1).contiguous()
         assert tuple(stacked.shape) == (B, C, H, self.config.head_size)
@@ -484,5 +491,27 @@ def train(
     return model
 
 
+def test_works_after_refactor():
+    """Small sanity check that I can do .forward() even after making
+    some small changes to the code.
+    """
+    print(f"Device: {device}")
+    tokenizer = Tokenizer.load(Path("tokenizer"))
+    max_context_length = 1024
+    config = MiniGPTConfig(
+        vocab_size=tokenizer.vocab_size,
+        embedding_size=384,
+        max_context_length=max_context_length,
+        head_size=384 // 6,
+        num_heads=6,
+        num_blocks=6,
+        use_flash_attention=False,
+    )
+    model = MiniGPT(config)
+    input_context = torch.zeros((1, max_context_length // 2), dtype=torch.long)
+    model.forward(input_context)
+    print("OK, forward successful.")
+
+
 if __name__ == "__main__":
-    main()
+    test_works_after_refactor()
