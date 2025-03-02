@@ -168,19 +168,9 @@ class MultiHeadSelfAttention(nn.Module):
     def __init__(self, config: MiniGPTConfig):
         super().__init__()
         self.config = config
-        self.keys = nn.Linear(
+        self.attn_c = nn.Linear(
             config.embedding_size,
-            config.head_size * config.num_heads,
-            bias=config.attention_bias,
-        )
-        self.queries = nn.Linear(
-            config.embedding_size,
-            config.head_size * config.num_heads,
-            bias=config.attention_bias,
-        )
-        self.values = nn.Linear(
-            config.embedding_size,
-            config.head_size * config.num_heads,
+            config.head_size * config.num_heads * 3,
             bias=config.attention_bias,
         )
         self.use_flash_attention = config.use_flash_attention
@@ -192,35 +182,19 @@ class MultiHeadSelfAttention(nn.Module):
             bias=config.attention_bias,
         )
 
-        # self-attention mask
-        self.register_buffer(
-            "mask",
-            ~torch.tril(
-                torch.ones(
-                    config.max_context_length,
-                    config.max_context_length,
-                    dtype=torch.bool,
-                )
-            ),
-        )
-
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         B, C, E = x.shape
         assert E == self.config.embedding_size
         H = self.config.num_heads
-        keys = self.keys.forward(x).view(B, C, H, self.config.head_size).transpose(2, 1)
-        queries = (
-            self.queries.forward(x).view(B, C, H, self.config.head_size).transpose(2, 1)
-        )
-        values = (
-            self.values.forward(x)
-            .reshape(B, C, H, self.config.head_size)
-            .transpose(2, 1)
-        )
+        queries, keys, values = self.attn_c.forward(x).split(self.config.head_size * H, dim=2)
+        queries = queries.view(B, C, H, self.config.head_size).transpose(2, 1)
+        keys = keys.view(B, C, H, self.config.head_size).transpose(2, 1)
+        values = values.view(B, C, H, self.config.head_size).transpose(2, 1)
 
         assert (
             tuple(keys.shape)
             == tuple(queries.shape)
+            == tuple(values.shape)
             == (B, H, C, self.config.head_size)
         )
         assert tuple(values.shape) == (B, H, C, self.config.head_size)
@@ -256,11 +230,22 @@ class MultiHeadSelfAttention(nn.Module):
         return output
 
 
+class NewGELUActivation(nn.Module):
+    """
+    Implementation of the GELU activation function currently in Google BERT repo (identical to OpenAI GPT). Also see
+    the Gaussian Error Linear Units paper: https://arxiv.org/abs/1606.08415
+    Copied over from the huggingface codebase.
+    """
+
+    def forward(self, input: torch.Tensor) -> torch.Tensor:
+        return 0.5 * input * (1.0 + torch.tanh(math.sqrt(2.0 / math.pi) * (input + 0.044715 * torch.pow(input, 3.0))))
+
+
 class FeedForward(nn.Module):
     def __init__(self, embedding_size: int, use_gelu: bool = False):
         super().__init__()
         self.linear_1 = nn.Linear(embedding_size, 4 * embedding_size)
-        self.act = nn.GELU(approximate="tanh") if use_gelu else nn.ReLU()
+        self.act = NewGELUActivation() if use_gelu else nn.ReLU()
         self.linear_2 = nn.Linear(4 * embedding_size, embedding_size)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:

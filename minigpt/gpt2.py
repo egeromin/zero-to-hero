@@ -23,7 +23,7 @@ import sys
 import torch
 from transformers import pipeline, set_seed, GPT2LMHeadModel, GPT2TokenizerFast
 
-from minigpt import MiniGPT, AttentionBlock, sample_from_model
+from minigpt import MiniGPT, AttentionBlock, sample_from_model, MiniGPTConfig
 
 
 def generate_samples():
@@ -40,6 +40,7 @@ def generate_samples():
 def init_model_from_state_dict(model: MiniGPT, hp_gpt2_sd: dict) -> MiniGPT:
     @torch.no_grad()
     def _copy_weights(source_tensor, target_tensor):
+        assert source_tensor.shape == target_tensor.shape
         target_tensor.copy_(source_tensor)
 
     # Copy over the embeddings.
@@ -58,21 +59,8 @@ def init_model_from_state_dict(model: MiniGPT, hp_gpt2_sd: dict) -> MiniGPT:
         source_attn_weight = hp_gpt2_sd[f"{prefix}.attn.c_attn.weight"].T
         source_attn_bias = hp_gpt2_sd[f"{prefix}.attn.c_attn.bias"]
 
-        # In the huggingface implementation, queries, keys, and values are stacked
-        # into a single tensor. Original code unpacking these:
-        # query_states, key_states, value_states = self.c_attn(hidden_states).split(self.split_size, dim=2)
-        source_query_weight, source_key_weight, source_value_weight = (
-            source_attn_weight.split(model.embedding_size, dim=0)
-        )
-        source_query_bias, source_key_bias, source_value_bias = source_attn_bias.split(
-            model.embedding_size
-        )
-        _copy_weights(source_query_weight, block.multi_head_attention.queries.weight)
-        _copy_weights(source_query_bias, block.multi_head_attention.queries.bias)
-        _copy_weights(source_key_weight, block.multi_head_attention.keys.weight)
-        _copy_weights(source_key_bias, block.multi_head_attention.keys.bias)
-        _copy_weights(source_value_weight, block.multi_head_attention.values.weight)
-        _copy_weights(source_value_bias, block.multi_head_attention.values.bias)
+        _copy_weights(source_attn_weight, block.multi_head_attention.attn_c.weight)
+        _copy_weights(source_attn_bias, block.multi_head_attention.attn_c.bias)
 
         # Note the transpose
         _copy_weights(
@@ -136,9 +124,9 @@ def main():
     head_size: {head_size}
     """)
 
-    model = MiniGPT(
+    config = MiniGPTConfig(
         vocab_size=vocab_size,
-        context_size=context_size,
+        max_context_length=context_size,
         embedding_size=embedding_size,
         num_blocks=num_blocks,
         num_heads=num_heads,
@@ -150,28 +138,31 @@ def main():
         ffw_use_gelu=True,
     )
 
+    model = MiniGPT(config)
+
     print("Initialized the model. Copying over pretrained weights...")
     model = init_model_from_state_dict(model, hp_gpt2_sd)
+    print("Copied.")
+
+    print(f"Checking logits are the same for our model VS the huggingface implementation...")
     model.eval()
-
     tokenizer = GPT2TokenizerFast.from_pretrained("gpt2")
-
     start_ctx = tokenizer.encode("I'm a language model,")
+    start_ctx_encoded = torch.tensor([start_ctx], dtype=torch.long)
 
     # Check the logits for the forward pass.
-    padded_ctx = torch.tensor(
-        [start_ctx + [0] * (context_size - len(start_ctx))], dtype=torch.long
-    )
-    logits_1 = hf_gpt2.forward(padded_ctx).logits
-    logits_2 = model.forward(padded_ctx)
+    logits_1 = hf_gpt2.forward(start_ctx_encoded).logits
+    logits_2 = model.forward(start_ctx_encoded)
     assert torch.allclose(logits_1, logits_2)
+    print(f"Check passed.")
+    print("Generating samples...")
 
     tokens = []
     tokens.extend(start_ctx)
 
     written_text = ""
     for token in sample_from_model(
-        model, context_size, 100, vocab_size, start_ctx=start_ctx
+        model, start_ctx=start_ctx, num_chars=100
     ):
         tokens.append(token)
         decoded = tokenizer.decode(tokens, skip_special_tokens=True)
