@@ -9,7 +9,7 @@ Tasks:
 2. Refactor code to use proper config dataclass. Rename context_length to max_context_length. ✅
 2. Swap out custom gelu with `nn.Gelu`. ✅
 2. Refactor to accept inputs of size less than context_length. Use this to fix sampling ✅
-2. Refactor self-attention to use single matrix for all of the projections.
+2. Refactor self-attention to use single matrix for all of the projections. ✅
    That should make it easier to load as well.
 3. Train using a proper dataloader.
    What about samples that have less than max_context length? How are these trained?
