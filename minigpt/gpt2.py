@@ -3,9 +3,19 @@ Train GPT-2 from scratch.
 
 Tasks:
 
-1. Sample from huggingface transformers GPT2.
+1. Sample from huggingface transformers GPT2. ✅
 2. Re-implement GPT2 using the MiniGPT class, load the pretrained weights and reproduce the samples,
-   ensuring that they're consistent.
+   ensuring that they're consistent.  ✅
+2. Refactor code to use proper config dataclass. Rename context_length to max_context_length. ✅
+2. Swap out custom gelu with `nn.Gelu`. ✅
+2. Refactor to accept inputs of size less than context_length. Use this to fix sampling
+2. Refactor self-attention to use single matrix for all of the projections.
+   That should make it easier to load as well.
+3. Train using a proper dataloader.
+   What about samples that have less than max_context length? How are these trained?
+   Would need to create a mask to do this, as suggested in the video.
+3. Retrain mini-shakespeare with all of these fixes. Set up remote SSH interpreter. Test lambda instead of vast.ai.
+5. Set up a remote session with 8 GPUs and reproduce all of the training optimisations listed in the video.
 """
 
 import sys

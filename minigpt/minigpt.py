@@ -27,6 +27,7 @@ To-do list:
 
 import math
 import sys
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Mapping, Iterable
 
@@ -137,6 +138,21 @@ def estimate_loss_and_accuracy(
     return mean_loss, mean_accuracy
 
 
+@dataclass(eq=True, frozen=True)
+class MiniGPTConfig:
+    vocab_size: int
+    max_context_length: int
+    embedding_size: int
+    head_size: int
+    num_heads: int
+    num_blocks: int
+    use_flash_attention: bool = False
+    attention_bias: bool = False
+    final_layer_bias: bool = True
+    final_layer_norm: bool = False
+    ffw_use_gelu: bool = False
+
+
 class MultiHeadSelfAttention(nn.Module):
     # What I recall from self-attention: each element in the context
     # talks to every other element in the context
@@ -149,45 +165,59 @@ class MultiHeadSelfAttention(nn.Module):
     # keys, queries, values
     # We learn the keys, queries and values for any embedding vector
 
-    def __init__(
-        self,
-        embedding_size: int,
-        head_size: int,
-        context_size: int,
-        num_heads: int,
-        use_flash_attention: bool = False,
-        bias: bool = False,
-    ):
+    def __init__(self, config: MiniGPTConfig):
         super().__init__()
-        self.embedding_size = embedding_size
-        self.head_size = head_size
-        self.context_size = context_size
-        self.num_heads = num_heads
-        self.keys = nn.Linear(embedding_size, head_size * num_heads, bias=bias)
-        self.queries = nn.Linear(embedding_size, head_size * num_heads, bias=bias)
-        self.values = nn.Linear(embedding_size, head_size * num_heads, bias=bias)
-        self.use_flash_attention = use_flash_attention
+        self.config = config
+        self.keys = nn.Linear(
+            config.embedding_size,
+            config.head_size * config.num_heads,
+            bias=config.attention_bias,
+        )
+        self.queries = nn.Linear(
+            config.embedding_size,
+            config.head_size * config.num_heads,
+            bias=config.attention_bias,
+        )
+        self.values = nn.Linear(
+            config.embedding_size,
+            config.head_size * config.num_heads,
+            bias=config.attention_bias,
+        )
+        self.use_flash_attention = config.use_flash_attention
 
         self.flatten = nn.Flatten(start_dim=2, end_dim=3)
-        self.linear = nn.Linear(head_size * num_heads, embedding_size, bias=bias)
+        self.linear = nn.Linear(
+            config.head_size * config.num_heads,
+            config.embedding_size,
+            bias=config.attention_bias,
+        )
 
         # self-attention mask
         self.register_buffer(
             "mask",
-            ~torch.tril(torch.ones(context_size, context_size, dtype=torch.bool)),
+            ~torch.tril(
+                torch.ones(
+                    config.max_context_length,
+                    config.max_context_length,
+                    dtype=torch.bool,
+                )
+            ),
         )
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         B, C, E = x.shape
-        assert E == self.embedding_size
-        assert C == self.context_size
+        assert E == self.config.embedding_size
         H = self.num_heads
         keys = self.keys.forward(x).view(B, C, H, self.head_size).transpose(2, 1)
         queries = self.queries.forward(x).view(B, C, H, self.head_size).transpose(2, 1)
-        assert tuple(keys.shape) == tuple(queries.shape) == (B, H, C, self.head_size)
-
         values = self.values.forward(x).reshape(B, C, H, self.head_size).transpose(2, 1)
-        assert tuple(values.shape) == (B, H, C, self.head_size)
+
+        assert (
+            tuple(keys.shape)
+            == tuple(queries.shape)
+            == (B, H, C, self.config.head_size)
+        )
+        assert tuple(values.shape) == (B, H, C, self.config.head_size)
 
         if self.use_flash_attention:
             after_attention = F.scaled_dot_product_attention(
@@ -211,40 +241,19 @@ class MultiHeadSelfAttention(nn.Module):
         assert tuple(after_attention.shape) == (B, H, C, self.head_size)
 
         stacked = after_attention.transpose(2, 1).contiguous()
-        assert tuple(stacked.shape) == (B, C, H, self.head_size)
+        assert tuple(stacked.shape) == (B, C, H, self.config.head_size)
         flat = self.flatten(stacked)
-        assert tuple(flat.shape) == (B, C, H * self.head_size)
+        assert tuple(flat.shape) == (B, C, H * self.config.head_size)
         output = self.linear(flat)
         assert tuple(output.shape) == (B, C, E)
         return output
-
-
-# "new gelu" activation, copied from huggingface code.
-class NewGELUActivation(nn.Module):
-    """
-    Implementation of the GELU activation function currently in Google BERT repo (identical to OpenAI GPT). Also see
-    the Gaussian Error Linear Units paper: https://arxiv.org/abs/1606.08415
-    """
-
-    def forward(self, input: torch.Tensor) -> torch.Tensor:
-        return (
-            0.5
-            * input
-            * (
-                1.0
-                + torch.tanh(
-                    math.sqrt(2.0 / math.pi)
-                    * (input + 0.044715 * torch.pow(input, 3.0))
-                )
-            )
-        )
 
 
 class FeedForward(nn.Module):
     def __init__(self, embedding_size: int, use_gelu: bool = False):
         super().__init__()
         self.linear_1 = nn.Linear(embedding_size, 4 * embedding_size)
-        self.act = NewGELUActivation() if use_gelu else nn.ReLU()
+        self.act = nn.GELU(approximate="tanh") if use_gelu else nn.ReLU()
         self.linear_2 = nn.Linear(4 * embedding_size, embedding_size)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
@@ -254,33 +263,16 @@ class FeedForward(nn.Module):
 
 
 class AttentionBlock(nn.Module):
-    def __init__(
-        self,
-        embedding_size: int,
-        head_size: int,
-        context_size: int,
-        num_heads: int,
-        use_flash_attention: bool = False,
-        bias: bool = False,
-        ffw_use_gelu: bool = False,
-    ):
+    def __init__(self, config: MiniGPTConfig):
         super().__init__()
-        self.embedding_size = embedding_size
-        self.head_size = head_size
-        self.context_size = context_size
-        self.num_heads = num_heads
-        self.norm_1 = nn.LayerNorm(embedding_size)
-        self.multi_head_attention = MultiHeadSelfAttention(
-            embedding_size=embedding_size,
-            head_size=head_size,
-            context_size=context_size,
-            num_heads=num_heads,
-            use_flash_attention=use_flash_attention,
-            bias=bias,
-        )
+        self.config = config
+        self.norm_1 = nn.LayerNorm(config.embedding_size)
+        self.multi_head_attention = MultiHeadSelfAttention(config)
         self.drop_1 = nn.Dropout(p=DROPOUT)
-        self.norm_2 = nn.LayerNorm(embedding_size)
-        self.feed_forward = FeedForward(embedding_size, use_gelu=ffw_use_gelu)
+        self.norm_2 = nn.LayerNorm(config.embedding_size)
+        self.feed_forward = FeedForward(
+            config.embedding_size, use_gelu=config.ffw_use_gelu
+        )
         self.drop_2 = nn.Dropout(p=DROPOUT)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
@@ -291,50 +283,28 @@ class AttentionBlock(nn.Module):
 
 
 class MiniGPT(torch.nn.Module):
-    def __init__(
-        self,
-        vocab_size: int,
-        context_size: int,
-        embedding_size: int,
-        head_size: int,
-        num_heads: int,
-        num_blocks: int,
-        use_flash_attention: bool = False,
-        attention_bias: bool = False,
-        final_layer_bias: bool = True,
-        final_layer_norm: bool = False,
-        ffw_use_gelu: bool = False,
-    ):
+    def __init__(self, config: MiniGPTConfig):
         super().__init__()
-        self.vocab_size = vocab_size
-        self.context_size = context_size
-        self.embedding_size = embedding_size
-        self.head_size = head_size
-        self.embedding = nn.Embedding(vocab_size, embedding_size)
+        self.config = config
+        self.embedding = nn.Embedding(
+            self.config.vocab_size, self.config.embedding_size
+        )
         # Learned positional encoding.
-        self.positional_encoding = nn.Embedding(context_size, embedding_size)
+        self.positional_encoding = nn.Embedding(
+            self.config.max_context_length, self.config.embedding_size
+        )
         self.dropout = nn.Dropout(p=DROPOUT)
         self.attention_blocks = nn.Sequential(
-            *[
-                AttentionBlock(
-                    embedding_size=embedding_size,
-                    head_size=head_size,
-                    context_size=context_size,
-                    num_heads=num_heads,
-                    use_flash_attention=use_flash_attention,
-                    bias=attention_bias,
-                    ffw_use_gelu=ffw_use_gelu,
-                )
-                for _ in range(num_blocks)
-            ]
+            *[AttentionBlock(self.config) for _ in range(self.config.num_blocks)]
         )
-        if final_layer_norm:
-            self.final_layer_norm = nn.LayerNorm(embedding_size)
+        if self.config.final_layer_norm:
+            self.final_layer_norm = nn.LayerNorm(self.config.embedding_size)
         else:
             self.final_layer_norm = nn.Identity()
-        self.linear = nn.Linear(embedding_size, vocab_size, bias=final_layer_bias)
-        self.register_buffer(
-            "positions", torch.tensor(range(self.context_size), dtype=torch.long)
+        self.linear = nn.Linear(
+            self.config.embedding_size,
+            self.config.vocab_size,
+            bias=self.config.final_layer_bias,
         )
         self.apply(self._init_weights)
 
@@ -350,12 +320,13 @@ class MiniGPT(torch.nn.Module):
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         B, C = x.shape
         emb = self.embedding.forward(x)
-        pos = self.positional_encoding.forward(self.positions)
+        positions = torch.arange(C)
+        pos = self.positional_encoding.forward(positions)
         hidden_state = emb + pos
         drop = self.dropout(hidden_state)
         sa = self.attention_blocks(drop)
         out = self.linear(self.final_layer_norm(sa))
-        assert tuple(out.shape) == (B, C, self.vocab_size)
+        assert tuple(out.shape) == (B, C, self.config.vocab_size)
         return out
 
 
@@ -403,16 +374,16 @@ def main():
 
     vocab_size = tokenizer.vocab_size
     print(f"Vocab size = {vocab_size}")
-    model = MiniGPT(
+    config = MiniGPTConfig(
         vocab_size=vocab_size,
         embedding_size=384,
-        context_size=context_size,
+        max_context_length=context_size,
         head_size=384 // 6,
         num_heads=6,
         num_blocks=6,
         use_flash_attention=True,
     )
-
+    model = MiniGPT(config)
     opt = AdamW(model.parameters(), lr=3e-4)
     max_training_iterations = 12_001
     model = train(model, X, Y, opt, max_training_iterations)
