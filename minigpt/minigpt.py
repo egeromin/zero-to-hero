@@ -297,7 +297,7 @@ class MiniGPT(torch.nn.Module):
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         B, C = x.shape
         emb = self.embedding.forward(x)
-        positions = torch.arange(C)
+        positions = torch.arange(C).to(device)
         pos = self.positional_encoding.forward(positions)
         hidden_state = emb + pos
         drop = self.dropout(hidden_state)
