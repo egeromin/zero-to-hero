@@ -402,7 +402,6 @@ def train(
     for i, (X_batch, Y_batch) in tqdm.tqdm(
         zip(range(max_training_iterations), loaders["train"])
     ):
-        assert tuple(Y_batch.shape)[1] == loaders["train"].context_size
         opt.zero_grad()
         logits = model.forward(X_batch)
         # Calculate the loss for each of the tokens in the input
