@@ -33,17 +33,16 @@ class DataLoader:
         self.context_size = context_size
         self.shuffle = shuffle
 
-    def __iter__(self) -> Iterator[tuple[torch.tensor, torch.tensor]]:
         remainder = (len(self.tokens) - 1) % self.context_size
-        final_batch = None
-        final_labels = None
+        self.final_batch = None
+        self.final_labels = None
         if remainder:
             print(f"There is a final batch of {remainder} tokens.")
             final_batch = torch.tensor([self.tokens[-remainder:-1]], dtype=torch.long)
             final_labels = torch.tensor(
                 [self.tokens[-remainder + 1 :]], dtype=torch.long
             )
-            final_batch, final_labels = final_batch.to(device), final_labels.to(device)
+            self.final_batch, self.final_labels = final_batch.to(device), final_labels.to(device)
 
         inputs = torch.tensor(self.tokens[: -remainder - 1], dtype=torch.long).view(
             -1, self.context_size
@@ -56,18 +55,19 @@ class DataLoader:
             perm = torch.randperm(len(inputs))
             inputs = inputs[perm]
             labels = labels[perm]
-        inputs, labels = inputs.to(device), labels.to(device)
+        self.inputs, self.labels = inputs.to(device), labels.to(device)
 
+    def __iter__(self) -> Iterator[tuple[torch.tensor, torch.tensor]]:
         batch_start_idx: int = 0
         while True:
             yield (
-                inputs[batch_start_idx : batch_start_idx + self.batch_size],
-                labels[batch_start_idx : batch_start_idx + self.batch_size],
+                self.inputs[batch_start_idx : batch_start_idx + self.batch_size],
+                self.labels[batch_start_idx : batch_start_idx + self.batch_size],
             )
             batch_start_idx += self.batch_size
-            if batch_start_idx >= len(inputs):
-                if final_batch is not None:
-                    yield final_batch, final_labels
+            if batch_start_idx >= len(self.inputs):
+                if self.final_batch is not None:
+                    yield self.final_batch, self.final_labels
                 batch_start_idx = 0
 
 

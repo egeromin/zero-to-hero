@@ -39,6 +39,7 @@ from matplotlib import pyplot as plt
 from torch import nn
 from torch.optim import AdamW
 
+from dataloader import dataloaders_from_corpus, TrainValDataloaders, DataLoader
 from tokenizer import Tokenizer
 
 torch.manual_seed(1337)
@@ -110,24 +111,19 @@ def load_dataset(
 @torch.no_grad()
 def estimate_loss_and_accuracy(
     model: nn.Module,
-    X: torch.Tensor,
-    Y: torch.Tensor,
+    loader: DataLoader,
     context_size: int,
     vocab_size: int,
     num_runs: int = 20,
-    batch_size: int = 64,
 ) -> tuple[float, float]:
     losses = []
     accuracies = []
-    for _ in range(num_runs):
-        perm = torch.randperm(len(X))[:batch_size]
-        X_batch = X[perm]
-        Y_batch = Y[perm]
+    for _, (X_batch, Y_batch) in zip(range(num_runs), loader):
         logits = model.forward(X_batch)
         preds = logits.argmax(dim=2)
         loss = F.cross_entropy(
-            logits.view(batch_size * context_size, vocab_size),
-            Y_batch.view(batch_size * context_size),
+            logits.view(-1, vocab_size),
+            Y_batch.view(-1),
         )
         assert preds.shape == Y_batch.shape
         accuracy = (preds == Y_batch).float().mean().item()
@@ -340,15 +336,18 @@ def main():
     print(f"Device: {device}")
     print("Loading dataset...")
     context_size = 256
+    batch_size = 64
     tokenizer = Tokenizer.load(Path("tokenizer"))
-    X, Y = load_dataset(
+    loaders = dataloaders_from_corpus(
         context_size=context_size,
         tokenizer=tokenizer,
         path_corpus=Path("tinyshakespeare.txt"),
-        cache_path=Path("dataset_caches/training"),
+        batch_size=batch_size,
     )
     print(
-        f"Done loading dataset. Train size = {len(X['train'])}, val size = {len(X['val'])}"
+        f"Done loading dataset. "
+        f"Train size = {len(loaders['train'].labels)}, "
+        f"val size = {len(loaders['val'].labels)}"
     )
 
     vocab_size = tokenizer.vocab_size
@@ -365,7 +364,7 @@ def main():
     model = MiniGPT(config)
     opt = AdamW(model.parameters(), lr=3e-4)
     max_training_iterations = 12_001
-    model = train(model, X, Y, opt, max_training_iterations)
+    model = train(model, loaders, opt, max_training_iterations)
 
     model.eval()
     sampled_tokens = list(
@@ -382,8 +381,7 @@ def main():
 
 def train(
     model: MiniGPT,
-    X: Mapping[str, torch.Tensor],
-    Y: Mapping[str, torch.Tensor],
+    loaders: TrainValDataloaders,
     opt: torch.optim.Optimizer,
     max_training_iterations: int,
 ):
@@ -392,45 +390,34 @@ def train(
     model.train()
     total_params = sum(p.numel() for p in model.parameters())
     print(f"Number of parameters: {total_params // 1e6}M parameters")
-    batch_size = 64
 
     train_losses = []
     validation_losses = []
     measure_every = 500
 
-    for i in tqdm.tqdm(range(max_training_iterations)):
-        perm = torch.randperm(len(X["train"]))[:batch_size]
-        X_batch = X["train"][perm]
-        Y_batch = Y["train"][perm]
-        assert tuple(Y_batch.shape) == (batch_size, model.context_size)
+    for i, (X_batch, Y_batch) in tqdm.tqdm(zip(range(max_training_iterations), loaders["train"])):
+        assert tuple(Y_batch.shape)[1] == model.context_size
         opt.zero_grad()
         logits = model.forward(X_batch)
         # Calculate the loss for each of the tokens in the input
         loss = F.cross_entropy(
-            logits.view(batch_size * model.context_size, model.vocab_size),
-            Y_batch.view(batch_size * model.context_size),
+            logits.view(-1, model.vocab_size),
+            Y_batch.view(-1),
         )
+        train_losses.append(loss)
         loss.backward()
         opt.step()
 
         if i % measure_every == 0:
             model.eval()
-            train_loss_estimate, _ = estimate_loss_and_accuracy(
-                model,
-                X["train"],
-                Y["train"],
-                context_size=model.context_size,
-                vocab_size=model.vocab_size,
-            )
             val_loss_estimate, val_accuracy_estimate = estimate_loss_and_accuracy(
                 model,
-                X["val"],
-                Y["val"],
+                loaders["val"],
                 context_size=model.context_size,
                 vocab_size=model.vocab_size,
             )
-            train_losses.append(train_loss_estimate)
             validation_losses.append(val_loss_estimate)
+            train_loss_estimate = sum(train_losses[-20:]) / 20
             print(
                 f"\n{i}: train loss = {train_loss_estimate:4f}, "
                 f"val loss = {val_loss_estimate:4f}, "
@@ -441,14 +428,18 @@ def train(
     print(f"Number of parameters: {total_params // 1e6}M parameters")
     # Plot training and validation losses
     fig, axes = plt.subplots(nrows=2, ncols=1, figsize=(4, 8))
-    train_losses_log10 = [math.log10(e) for e in train_losses]
-    val_losses_log10 = [math.log10(e) for e in validation_losses]
-    train_iteration = [i * measure_every for i in range(len(train_losses))]
-    axes[0].plot(train_iteration, train_losses_log10)
+    average_every = 20
+    remainder = len(train_losses) % average_every
+    average_train_losses = torch.tensor(train_losses[:-remainder]).view(-1, average_every).mean(dim=1)
+    train_losses_log10 = [math.log10(e) for e in average_train_losses]
+    axes[0].plot([i * average_every for i in range(len(average_train_losses))], train_losses_log10)
     axes[0].set_xlabel("Training iteration")
     axes[0].set_ylabel("Log10 Train loss")
     axes[0].set_title("Log10 training losses during the training")
-    axes[1].plot(train_iteration, val_losses_log10)
+
+    val_losses_log10 = [math.log10(e) for e in validation_losses]
+    val_iteration = [i * measure_every for i in range(len(validation_losses))]
+    axes[1].plot(val_iteration, val_losses_log10)
     axes[1].set_xlabel("Training iteration")
     axes[1].set_ylabel("Log10 Validation loss")
     axes[1].set_title("Log10 validation losses during the training")
