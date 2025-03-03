@@ -366,14 +366,19 @@ def main():
     model = train(model, loaders, opt, max_training_iterations)
 
     model.eval()
-    sampled_tokens = list(
-        sample_from_model(
-            model,
-            num_chars=10000,
-        )
-    )
-    sample = tokenizer.decode(sampled_tokens)
-    print(sample[:1000])
+
+    start_ctx = tokenizer.encode("I'm a language model,")
+    tokens = []
+    tokens.extend(start_ctx)
+
+    written_text = ""
+    for token in sample_from_model(model, start_ctx=start_ctx, num_chars=10000):
+        tokens.append(token)
+        decoded = tokenizer.decode(tokens, skip_special_tokens=True)
+        sys.stdout.write(decoded[len(written_text) :])
+        written_text = decoded
+
+    sample = tokenizer.decode(tokens)
     Path("generated-sample.txt").write_text(sample)
     torch.save(model.state_dict(), "model-minigpt.pth")
 
