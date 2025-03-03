@@ -400,7 +400,8 @@ def train(
     measure_every = 500
 
     for i, (X_batch, Y_batch) in tqdm.tqdm(
-        zip(range(max_training_iterations), loaders["train"])
+        zip(range(max_training_iterations), loaders["train"]),
+        total=max_training_iterations,
     ):
         opt.zero_grad()
         logits = model.forward(X_batch)
