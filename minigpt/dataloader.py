@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import Protocol, Iterator
+from typing import Protocol, Iterator, TypedDict
 
 import torch
 
@@ -21,18 +21,13 @@ class DataLoader:
 
     def __init__(
         self,
-        path_corpus: Path,
-        tokenizer: TokenizerInterface,
+        tokens: list[int],
         batch_size: int,
         context_size: int,
     ):
-        self.tokenizer = tokenizer
+        self.tokens = tokens
         self.batch_size = batch_size
         self.context_size = context_size
-        self.corpus = path_corpus.read_text()
-        print("Encoding corpus...")
-        self.tokens = tokenizer.encode(self.corpus)
-        print("Done encoding corpus.")
 
     def __iter__(self) -> Iterator[tuple[torch.tensor, torch.tensor]]:
         remainder = (len(self.tokens) - 1) % self.context_size
@@ -64,17 +59,52 @@ class DataLoader:
             yield final_batch, final_labels
 
 
+class TrainValDataloaders(TypedDict):
+    train: DataLoader
+    val: DataLoader | None
+
+
+def dataloaders_from_corpus(
+    path_corpus: Path,
+    tokenizer: TokenizerInterface,
+    batch_size: int,
+    context_size: int,
+    val_split: float | None = None,
+) -> TrainValDataloaders:
+    corpus = path_corpus.read_text()
+    print("Encoding corpus...")
+    tokens = tokenizer.encode(corpus)
+    print("Done encoding corpus.")
+    if val_split is not None:
+        split = int(len(tokens) * (1.0 - val_split))
+        train_tokens = tokens[:split]
+        val_tokens = tokens[split:]
+        train_dataloader = DataLoader(
+            train_tokens, batch_size=batch_size, context_size=context_size
+        )
+        val_dataloader = DataLoader(
+            val_tokens, batch_size=batch_size, context_size=context_size
+        )
+    else:
+        train_dataloader = DataLoader(
+            tokens, batch_size=batch_size, context_size=context_size
+        )
+        val_dataloader = None
+    return {"train": train_dataloader, "val": val_dataloader}
+
+
 # Testing
 def main():
     from tokenizer import Tokenizer
 
     tokenizer = Tokenizer.load(Path("tokenizer"))
-    loader = DataLoader(
+    loader = dataloaders_from_corpus(
         tokenizer=tokenizer,
         path_corpus=Path("tinyshakespeare.txt"),
         context_size=256,
         batch_size=64,
-    )
+        val_split=0.1,
+    )["train"]
     x, y = None, None
     for x, y in loader:
         print(tuple(x.shape), tuple(y.shape))
