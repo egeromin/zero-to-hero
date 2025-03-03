@@ -59,15 +59,16 @@ class DataLoader:
         inputs, labels = inputs.to(device), labels.to(device)
 
         batch_start_idx: int = 0
-        while batch_start_idx < len(inputs):
+        while True:
             yield (
                 inputs[batch_start_idx : batch_start_idx + self.batch_size],
                 labels[batch_start_idx : batch_start_idx + self.batch_size],
             )
             batch_start_idx += self.batch_size
-
-        if final_batch is not None:
-            yield final_batch, final_labels
+            if batch_start_idx >= len(inputs):
+                if final_batch is not None:
+                    yield final_batch, final_labels
+                batch_start_idx = 0
 
 
 class TrainValDataloaders(TypedDict):
@@ -117,7 +118,7 @@ def main():
         val_split=0.1,
     )["train"]
     x, y = None, None
-    for x, y in loader:
+    for _, (x, y) in zip(range(20), loader):
         print(tuple(x.shape), tuple(y.shape))
 
     if x is not None:
