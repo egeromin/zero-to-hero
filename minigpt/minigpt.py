@@ -374,7 +374,7 @@ def main():
     written_text = ""
     for token in sample_from_model(model, start_ctx=start_ctx, num_chars=10000):
         tokens.append(token)
-        decoded = tokenizer.decode(tokens, skip_special_tokens=True)
+        decoded = tokenizer.decode(tokens)
         sys.stdout.write(decoded[len(written_text) :])
         written_text = decoded
 
