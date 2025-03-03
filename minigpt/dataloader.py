@@ -3,6 +3,8 @@ from typing import Protocol, Iterator, TypedDict
 
 import torch
 
+device = "cuda" if torch.cuda.is_available() else "cpu"
+
 
 class TokenizerInterface(Protocol):
     def encode(self, text: str) -> list[int]: ...
@@ -24,10 +26,12 @@ class DataLoader:
         tokens: list[int],
         batch_size: int,
         context_size: int,
+        shuffle: bool = True,
     ):
         self.tokens = tokens
         self.batch_size = batch_size
         self.context_size = context_size
+        self.shuffle = shuffle
 
     def __iter__(self) -> Iterator[tuple[torch.tensor, torch.tensor]]:
         remainder = (len(self.tokens) - 1) % self.context_size
@@ -39,6 +43,7 @@ class DataLoader:
             final_labels = torch.tensor(
                 [self.tokens[-remainder + 1 :]], dtype=torch.long
             )
+            final_batch, final_labels = final_batch.to(device), final_labels.to(device)
 
         inputs = torch.tensor(self.tokens[: -remainder - 1], dtype=torch.long).view(
             -1, self.context_size
@@ -47,6 +52,12 @@ class DataLoader:
             -1, self.context_size
         )
         assert inputs.shape == labels.shape
+        if self.shuffle:
+            perm = torch.randperm(len(inputs))
+            inputs = inputs[perm]
+            labels = labels[perm]
+        inputs, labels = inputs.to(device), labels.to(device)
+
         batch_start_idx: int = 0
         while batch_start_idx < len(inputs):
             yield (
