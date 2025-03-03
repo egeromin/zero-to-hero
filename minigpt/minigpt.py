@@ -112,8 +112,6 @@ def load_dataset(
 def estimate_loss_and_accuracy(
     model: nn.Module,
     loader: DataLoader,
-    context_size: int,
-    vocab_size: int,
     num_runs: int = 20,
 ) -> tuple[float, float]:
     losses = []
@@ -122,7 +120,7 @@ def estimate_loss_and_accuracy(
         logits = model.forward(X_batch)
         preds = logits.argmax(dim=2)
         loss = F.cross_entropy(
-            logits.view(-1, vocab_size),
+            logits.view(-1, model.config.vocab_size),
             Y_batch.view(-1),
         )
         assert preds.shape == Y_batch.shape
@@ -314,7 +312,7 @@ def sample_from_model(
     num_chars: int,
     start_ctx: list[int] | None = None,
 ) -> Iterable[int]:
-    current_ctx = start_ctx or []
+    current_ctx = start_ctx or [0]
     for _sample in range(num_chars):
         current_ctx = current_ctx[-model.config.max_context_length :]
         input = torch.tensor([current_ctx], dtype=torch.long).to(device)
@@ -343,6 +341,7 @@ def main():
         tokenizer=tokenizer,
         path_corpus=Path("tinyshakespeare.txt"),
         batch_size=batch_size,
+        val_split=0.2,
     )
     print(
         f"Done loading dataset. "
@@ -363,7 +362,7 @@ def main():
     )
     model = MiniGPT(config)
     opt = AdamW(model.parameters(), lr=3e-4)
-    max_training_iterations = 12_001
+    max_training_iterations = 8_001
     model = train(model, loaders, opt, max_training_iterations)
 
     model.eval()
@@ -396,12 +395,12 @@ def train(
     measure_every = 500
 
     for i, (X_batch, Y_batch) in tqdm.tqdm(zip(range(max_training_iterations), loaders["train"])):
-        assert tuple(Y_batch.shape)[1] == model.context_size
+        assert tuple(Y_batch.shape)[1] == loaders["train"].context_size
         opt.zero_grad()
         logits = model.forward(X_batch)
         # Calculate the loss for each of the tokens in the input
         loss = F.cross_entropy(
-            logits.view(-1, model.vocab_size),
+            logits.view(-1, model.config.vocab_size),
             Y_batch.view(-1),
         )
         train_losses.append(loss)
@@ -413,8 +412,6 @@ def train(
             val_loss_estimate, val_accuracy_estimate = estimate_loss_and_accuracy(
                 model,
                 loaders["val"],
-                context_size=model.context_size,
-                vocab_size=model.vocab_size,
             )
             validation_losses.append(val_loss_estimate)
             train_loss_estimate = sum(train_losses[-20:]) / 20
@@ -486,4 +483,4 @@ def test_works_after_refactor():
 
 
 if __name__ == "__main__":
-    test_works_after_refactor()
+    main()
