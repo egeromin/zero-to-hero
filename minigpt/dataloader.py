@@ -42,7 +42,10 @@ class DataLoader:
             final_labels = torch.tensor(
                 [self.tokens[-remainder + 1 :]], dtype=torch.long
             )
-            self.final_batch, self.final_labels = final_batch.to(device), final_labels.to(device)
+            self.final_batch, self.final_labels = (
+                final_batch.to(device),
+                final_labels.to(device),
+            )
 
         inputs = torch.tensor(self.tokens[: -remainder - 1], dtype=torch.long).view(
             -1, self.context_size

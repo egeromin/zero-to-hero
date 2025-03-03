@@ -394,7 +394,9 @@ def train(
     validation_losses = []
     measure_every = 500
 
-    for i, (X_batch, Y_batch) in tqdm.tqdm(zip(range(max_training_iterations), loaders["train"])):
+    for i, (X_batch, Y_batch) in tqdm.tqdm(
+        zip(range(max_training_iterations), loaders["train"])
+    ):
         assert tuple(Y_batch.shape)[1] == loaders["train"].context_size
         opt.zero_grad()
         logits = model.forward(X_batch)
@@ -427,9 +429,14 @@ def train(
     fig, axes = plt.subplots(nrows=2, ncols=1, figsize=(4, 8))
     average_every = 20
     remainder = len(train_losses) % average_every
-    average_train_losses = torch.tensor(train_losses[:-remainder]).view(-1, average_every).mean(dim=1)
+    average_train_losses = (
+        torch.tensor(train_losses[:-remainder]).view(-1, average_every).mean(dim=1)
+    )
     train_losses_log10 = [math.log10(e) for e in average_train_losses]
-    axes[0].plot([i * average_every for i in range(len(average_train_losses))], train_losses_log10)
+    axes[0].plot(
+        [i * average_every for i in range(len(average_train_losses))],
+        train_losses_log10,
+    )
     axes[0].set_xlabel("Training iteration")
     axes[0].set_ylabel("Log10 Train loss")
     axes[0].set_title("Log10 training losses during the training")
