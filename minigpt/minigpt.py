@@ -153,6 +153,7 @@ class MultiHeadSelfAttention(nn.Module):
             # Mask the *upper half* since each query should not interact
             # with keys that come after it in the context.
             mask = ~torch.tril(torch.ones(C, C, dtype=torch.bool))
+            mask = mask.to(device)
             masked_sa = torch.where(mask, -torch.inf, sa)
             assert tuple(masked_sa.shape) == (B, H, C, C)
             scale_factor = 1 / self.config.head_size**0.5
@@ -320,7 +321,8 @@ def main():
     )
     model = MiniGPT(config)
     opt = AdamW(model.parameters(), lr=3e-4)
-    max_training_iterations = 8_001
+    # max_training_iterations = 8_001
+    max_training_iterations = 50
     model = train(model, loaders, opt, max_training_iterations)
 
     model.eval()
