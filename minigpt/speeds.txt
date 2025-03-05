@@ -1,0 +1,5 @@
+Baseline
+49: train loss = 6.156622, time = 981ms, tok/s = 16701
+
+Using TF32
+49: train loss = 6.157476, time = 370ms, tok/s = 44269
