@@ -16,7 +16,7 @@ Tasks:
    Add support for shuffling and sending to the device - V1. ✅
    Add support for starting from scratch, if we process the whole corpus. ✅
    Refactor `minigpt.py` to use the data loader. ✅
-3. Retrain mini-shakespeare with all of these fixes. Set up remote SSH interpreter. Test lambda instead of vast.ai.
+3. Retrain mini-shakespeare with all of these fixes. Set up remote SSH interpreter. Test lambda instead of vast.ai. ✅
 5. Set up a remote session with 8 GPUs and reproduce all of the training optimisations listed in the video.
 """
 

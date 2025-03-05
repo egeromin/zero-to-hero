@@ -8,7 +8,8 @@ import torch
 from torch import nn
 from torch.optim import AdamW
 
-from minigpt import MiniGPT, load_dataset, train, sample_from_model
+from dataloader import dataloaders_from_corpus
+from minigpt import MiniGPT, train, sample_from_model, MiniGPTConfig
 from tokenizer import Tokenizer
 
 
@@ -18,15 +19,16 @@ device = "cuda" if torch.cuda.is_available() else "cpu"
 def fine_tune_model():
     tokenizer = Tokenizer.load(Path("tokenizer"))
     context_size = 256
-    model = MiniGPT(
+    config = MiniGPTConfig(
         vocab_size=tokenizer.vocab_size,
         embedding_size=384,
-        context_size=context_size,
+        max_context_length=context_size,
         head_size=384 // 6,
         num_heads=6,
         num_blocks=6,
         use_flash_attention=True,
     )
+    model = MiniGPT(config=config)
     model.load_state_dict(torch.load("model-minigpt.pth", map_location=device))
 
     # Now we fine tune, by adding an extra token
@@ -85,23 +87,25 @@ def fine_tune_model():
     print(f"Fine-tuning on {len(params_to_train)} parameters.")
     opt = AdamW(params_to_train, lr=3e-4)
 
-    X, Y = load_dataset(
+    batch_size = 64
+    loaders = dataloaders_from_corpus(
         context_size=context_size,
         tokenizer=tokenizer,
         path_corpus=Path("finetuning-corpus.txt"),
-        cache_path=Path("dataset_caches/finetuning"),
+        batch_size=batch_size,
+        val_split=0.2,
     )
 
     max_training_iterations = 100
-    model = train(model, X, Y, opt, max_training_iterations)
+    model = train(
+        model, loaders=loaders, max_training_iterations=max_training_iterations, opt=opt
+    )
 
     model.eval()
     sampled_tokens = list(
         sample_from_model(
             model,
-            context_size=model.context_size,
             num_chars=10000,
-            vocab_size=model.vocab_size,
         )
     )
     sample = tokenizer.decode(sampled_tokens)

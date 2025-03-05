@@ -29,7 +29,7 @@ import math
 import sys
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Mapping, Iterable
+from typing import Iterable
 
 import torch
 import torch.nn.functional as F
@@ -48,64 +48,6 @@ device = "cuda" if torch.cuda.is_available() else "cpu"
 if device == "cuda":
     print(f"Using {device}, matplotlib in Agg mode")
     matplotlib.use("Agg")
-
-
-def load_dataset(
-    context_size: int,
-    tokenizer: Tokenizer,
-    path_corpus: Path,
-    cache_path: Path | None = None,
-) -> tuple[Mapping[str, torch.Tensor], Mapping[str, torch.Tensor]]:
-    """
-    Returns a tensor of X's, Y's, already prepared for training,
-    given the context size.
-
-    Return:
-        X: training contexts
-        Y: output labels
-        stoi: mapping of str to int
-    """
-    if cache_path and (cache_path / "train_x.pt").exists():
-        print("Loading cached dataset.")
-        X = torch.load(cache_path / "train_x.pt")
-        Y = torch.load(cache_path / "train_y.pt")
-    else:
-        print("Reading corpus...")
-        corpus = path_corpus.read_text()
-        print("Encoding corpus...")
-        tokens = tokenizer.encode(corpus, verbose=True)
-        print("Done encoding corpus.")
-        num_training_samples = len(tokens) - context_size
-        X = torch.zeros((num_training_samples, context_size), dtype=torch.long)
-        Y = torch.zeros((num_training_samples, context_size), dtype=torch.long)
-        for i in range(num_training_samples):
-            input_ctx = tokens[i : i + context_size]
-            output_ctx = tokens[i + 1 : i + context_size + 1]
-            X[i, :] = torch.tensor(input_ctx, dtype=torch.long)
-            Y[i, :] = torch.tensor(output_ctx, dtype=torch.long)
-
-        print("Saving processed dataset to cache")
-        if cache_path:
-            cache_path.mkdir(exist_ok=True, parents=True)
-            torch.save(X, cache_path / "train_x.pt")
-            torch.save(Y, cache_path / "train_y.pt")
-
-    # Shuffle input data and get train/val split
-    perm = torch.randperm(len(X))
-    X = X[perm]
-    Y = Y[perm]
-
-    # Move the inputs and labels to GPU.
-    # For tensors, .to(device) returns a copy on the desired device.
-    X, Y = X.to(device), Y.to(device)
-
-    split = int(len(X) * 0.8)
-    X_train = X[:split]
-    Y_train = Y[:split]
-    X_val = X[split:]
-    Y_val = Y[split:]
-
-    return {"train": X_train, "val": X_val}, {"train": Y_train, "val": Y_val}
 
 
 @torch.no_grad()
