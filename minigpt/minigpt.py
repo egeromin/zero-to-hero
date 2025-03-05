@@ -118,6 +118,7 @@ class MultiHeadSelfAttention(nn.Module):
             config.embedding_size,
             bias=config.attention_bias,
         )
+        self.linear.SCALE_BY_NUM_BLOCKS = True
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         B, C, E = x.shape
@@ -175,6 +176,7 @@ class FeedForward(nn.Module):
         self.linear_1 = nn.Linear(embedding_size, 4 * embedding_size)
         self.act = nn.GELU(approximate="tanh") if use_gelu else nn.ReLU()
         self.linear_2 = nn.Linear(4 * embedding_size, embedding_size)
+        self.linear_2.SCALE_BY_NUM_BLOCKS = True
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         l1 = self.linear_1(x)
@@ -229,10 +231,15 @@ class MiniGPT(torch.nn.Module):
         self.linear.weight = self.embedding.weight  # parameter sharing
         self.apply(self._init_weights)
 
-    @staticmethod
-    def _init_weights(module):
+    def _init_weights(self, module):
         if isinstance(module, nn.Linear):
-            nn.init.normal_(module.weight, mean=0.0, std=0.02)
+            scale_factor = 1
+            if hasattr(module, "SCALE_BY_NUM_BLOCKS"):
+                # Downscale the weights for projections that contribute
+                # towards the residual, depending on the total number of blocks,
+                # and therefore of residual connections.
+                scale_factor = (2 * self.config.num_blocks) ** -0.5
+            nn.init.normal_(module.weight, mean=0.0, std=0.02 * scale_factor)
             if module.bias is not None:
                 nn.init.zeros_(module.bias)
         elif isinstance(module, nn.Embedding):
