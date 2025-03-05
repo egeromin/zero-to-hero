@@ -51,6 +51,7 @@ if device == "cuda":
     torch.cuda.manual_seed(1337)
     print(f"Using {device}, matplotlib in Agg mode")
     matplotlib.use("Agg")
+    torch.set_float32_matmul_precision("high")
 
 
 @torch.no_grad()
