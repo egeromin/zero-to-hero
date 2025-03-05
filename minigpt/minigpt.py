@@ -286,7 +286,7 @@ def main():
             sys.exit(1)
     print(f"Device: {device}")
     print("Loading dataset...")
-    context_size = 256
+    context_size = 1024
     batch_size = 64
     # tokenizer = Tokenizer.load(Path("tokenizer"))  # my own tokenizer
     tokenizer = tiktoken.get_encoding("gpt2")  # use tiktoken
@@ -307,12 +307,16 @@ def main():
     print(f"Vocab size = {vocab_size}")
     config = MiniGPTConfig(
         vocab_size=vocab_size,
-        embedding_size=384,
+        embedding_size=768,
         max_context_length=context_size,
-        head_size=384 // 6,
-        num_heads=6,
-        num_blocks=6,
-        use_flash_attention=True,
+        head_size=768 // 12,
+        num_heads=12,
+        num_blocks=12,
+        use_flash_attention=False,
+        attention_bias=True,
+        final_layer_bias=False,
+        final_layer_norm=True,
+        ffw_use_gelu=True,
     )
     model = MiniGPT(config)
     opt = AdamW(model.parameters(), lr=3e-4)
