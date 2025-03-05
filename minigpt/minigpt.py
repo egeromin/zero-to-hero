@@ -47,6 +47,7 @@ torch.manual_seed(1337)
 DROPOUT = 0.2
 device = "cuda" if torch.cuda.is_available() else "cpu"
 if device == "cuda":
+    torch.cuda.manual_seed(1337)
     print(f"Using {device}, matplotlib in Agg mode")
     matplotlib.use("Agg")
 
@@ -366,6 +367,8 @@ def train(
         loss.backward()
         opt.step()
 
+        train_loss_estimate = sum(train_losses[-20:]) / len(train_losses[-20:])
+        print(f"\n{i}: train loss = {train_loss_estimate:4f}, ")
         if i % measure_every == 0:
             model.eval()
             val_loss_estimate, val_accuracy_estimate = estimate_loss_and_accuracy(
@@ -373,9 +376,7 @@ def train(
                 loaders["val"],
             )
             validation_losses.append(val_loss_estimate)
-            train_loss_estimate = sum(train_losses[-20:]) / 20
             print(
-                f"\n{i}: train loss = {train_loss_estimate:4f}, "
                 f"val loss = {val_loss_estimate:4f}, "
                 f"val accuracy = {val_accuracy_estimate * 100:.2f}%"
             )
