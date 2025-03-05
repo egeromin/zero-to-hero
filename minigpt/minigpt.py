@@ -288,7 +288,7 @@ def main():
     print(f"Device: {device}")
     print("Loading dataset...")
     context_size = 1024
-    batch_size = 64
+    batch_size = 16
     # tokenizer = Tokenizer.load(Path("tokenizer"))  # my own tokenizer
     tokenizer = tiktoken.get_encoding("gpt2")  # use tiktoken
     loaders = dataloaders_from_corpus(
