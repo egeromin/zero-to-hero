@@ -31,6 +31,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable
 
+import tiktoken
 import torch
 import torch.nn.functional as F
 import tqdm
@@ -225,6 +226,7 @@ class MiniGPT(torch.nn.Module):
             self.config.vocab_size,
             bias=self.config.final_layer_bias,
         )
+        self.linear.weight = self.embedding.weight  # parameter sharing
         self.apply(self._init_weights)
 
     @staticmethod
@@ -277,7 +279,8 @@ def main():
     print("Loading dataset...")
     context_size = 256
     batch_size = 64
-    tokenizer = Tokenizer.load(Path("tokenizer"))
+    # tokenizer = Tokenizer.load(Path("tokenizer"))  # my own tokenizer
+    tokenizer = tiktoken.get_encoding("gpt2")  # use tiktoken
     loaders = dataloaders_from_corpus(
         context_size=context_size,
         tokenizer=tokenizer,
@@ -287,11 +290,11 @@ def main():
     )
     print(
         f"Done loading dataset. "
-        f"Train size = {len(loaders['train'].labels)}, "
-        f"val size = {len(loaders['val'].labels)}"
+        f"Train size = {loaders['train'].num_batches} batches, {loaders['train'].num_tokens} tokens "
+        f"Val size = {loaders['val'].num_batches} batches, {loaders['val'].num_tokens} tokens "
     )
 
-    vocab_size = tokenizer.vocab_size
+    vocab_size = tokenizer.n_vocab
     print(f"Vocab size = {vocab_size}")
     config = MiniGPTConfig(
         vocab_size=vocab_size,

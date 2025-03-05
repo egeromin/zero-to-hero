@@ -60,6 +60,20 @@ class DataLoader:
             labels = labels[perm]
         self.inputs, self.labels = inputs.to(device), labels.to(device)
 
+    @property
+    def num_tokens(self) -> int:
+        num = self.labels.shape[0] * self.labels.shape[1]
+        if self.final_batch is not None:
+            num += self.final_batch.shape[1]
+        return int(num)
+
+    @property
+    def num_batches(self) -> int:
+        num = len(self.labels)
+        if self.final_batch is not None:
+            num += 1
+        return num
+
     def __iter__(self) -> Iterator[tuple[torch.tensor, torch.tensor]]:
         batch_start_idx: int = 0
         while True:
