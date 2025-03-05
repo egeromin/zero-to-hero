@@ -27,6 +27,7 @@ To-do list:
 
 import math
 import sys
+import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable
@@ -356,6 +357,7 @@ def train(
         zip(range(max_training_iterations), loaders["train"]),
         total=max_training_iterations,
     ):
+        start = time.time()
         opt.zero_grad()
         logits = model.forward(X_batch)
         # Calculate the loss for each of the tokens in the input
@@ -366,9 +368,18 @@ def train(
         train_losses.append(loss)
         loss.backward()
         opt.step()
+        if device == "cuda":
+            torch.cuda.synchronize()
+        end = time.time()
+        elapsed = end - start
+        n_tok = X_batch.shape[0] * X_batch.shape[1]
+        tok_ps = n_tok / elapsed
 
         train_loss_estimate = sum(train_losses[-20:]) / len(train_losses[-20:])
-        print(f"\n{i}: train loss = {train_loss_estimate:4f}, ")
+        print(
+            f"\n{i}: train loss = {train_loss_estimate:4f}, time = {elapsed * 1000:.0f}ms, tok/s = {tok_ps:.0f}"
+        )
+
         if i % measure_every == 0:
             model.eval()
             val_loss_estimate, val_accuracy_estimate = estimate_loss_and_accuracy(
