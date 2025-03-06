@@ -280,6 +280,25 @@ def sample_from_model(
         current_ctx.append(sample)
 
 
+def gpt2_learning_rate_schedule(
+    step: int, warmup_steps: int, max_training_iterations: int
+):
+    max_lr = 6e-4
+    min_lr = max_lr * 0.1
+    if step < warmup_steps:
+        return max_lr * (step + 1 / warmup_steps)
+    if step > max_training_iterations:
+        return min_lr
+
+    cosine_decay_factor = 0.5 * (
+        1.0
+        + math.cos(
+            math.pi * (step - warmup_steps) / (max_training_iterations - warmup_steps)
+        )
+    )
+    return min_lr + (max_lr - min_lr) * cosine_decay_factor
+
+
 def main():
     if len(sys.argv) > 1 and sys.argv[1] == "require-cuda":
         if device != "cuda":
@@ -361,6 +380,7 @@ def train(
     train_losses = []
     validation_losses = []
     measure_every = 500
+    warmup_steps = 10
 
     for i, (X_batch, Y_batch) in tqdm.tqdm(
         zip(range(max_training_iterations), loaders["train"]),
@@ -385,6 +405,11 @@ def train(
             loss.backward()
             norm = torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
         train_losses.append(loss)
+        learning_rate = gpt2_learning_rate_schedule(
+            i, warmup_steps, max_training_iterations
+        )
+        for param_group in opt.param_groups:
+            param_group["lr"] = learning_rate
         opt.step()
         torch.cuda.synchronize()
         end = time.time()
