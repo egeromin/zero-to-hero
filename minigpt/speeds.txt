@@ -3,3 +3,7 @@ Baseline
 
 Using TF32
 49: train loss = 6.157476, time = 370ms, tok/s = 44269
+
+On a faster machine - higher memory bandwidth
+49: train loss = 6.157435, time = 334ms, tok/s = 48985
+
