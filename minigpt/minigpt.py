@@ -450,8 +450,11 @@ def test_works_after_refactor():
     print(f"Device: {device}")
     tokenizer = Tokenizer.load(Path("tokenizer"))
     max_context_length = 1024
+    vocab_size = 50304
+    assert vocab_size >= tokenizer.vocab_size
+    assert vocab_size % 128 == 0
     config = MiniGPTConfig(
-        vocab_size=tokenizer.vocab_size,
+        vocab_size=vocab_size,
         embedding_size=384,
         max_context_length=max_context_length,
         head_size=384 // 6,
