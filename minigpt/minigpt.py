@@ -365,6 +365,7 @@ def train(
         zip(range(max_training_iterations), loaders["train"]),
         total=max_training_iterations,
     ):
+        assert X_batch.shape == Y_batch.shape
         start = time.time()
         opt.zero_grad()
         with torch.autocast(device_type=device, dtype=torch.bfloat16):
@@ -385,7 +386,10 @@ def train(
 
         train_loss_estimate = sum(train_losses[-20:]) / len(train_losses[-20:])
         print(
-            f"\n{i}: train loss = {train_loss_estimate:4f}, time = {elapsed * 1000:.0f}ms, tok/s = {tok_ps:.0f}"
+            f"\n{i}: train loss = {train_loss_estimate:4f}, "
+            f"time = {elapsed * 1000:.0f}ms, "
+            f"tok/s = {tok_ps:.0f}, "
+            f"shape = {tuple(X_batch.shape)}"
         )
 
         # if i % measure_every == 0:
