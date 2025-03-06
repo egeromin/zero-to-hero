@@ -13,3 +13,6 @@ With bfloat16
 With torch.compile
 49: train loss = 6.177520, time = 157ms, tok/s = 104288
 
+With flash attention
+49: train loss = 6.215732, time = 121ms, tok/s = 135158
+
