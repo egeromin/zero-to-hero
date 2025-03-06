@@ -27,7 +27,6 @@ class DataLoader:
         batch_size: int,
         context_size: int,
         shuffle: bool = True,
-        use_final_batch: bool = True,
     ):
         self.tokens = tokens
         self.batch_size = batch_size
@@ -37,7 +36,7 @@ class DataLoader:
         remainder = (len(self.tokens) - 1) % self.context_size
         self.final_batch = None
         self.final_labels = None
-        if remainder and use_final_batch:
+        if remainder:
             print(f"There is a final batch of {remainder} tokens.")
             final_batch = torch.tensor([self.tokens[-remainder:-1]], dtype=torch.long)
             final_labels = torch.tensor(
@@ -100,7 +99,6 @@ def dataloaders_from_corpus(
     batch_size: int,
     context_size: int,
     val_split: float | None = None,
-    use_final_batch: bool = True,
 ) -> TrainValDataloaders:
     corpus = path_corpus.read_text()
     print("Encoding corpus...")
@@ -111,23 +109,14 @@ def dataloaders_from_corpus(
         train_tokens = tokens[:split]
         val_tokens = tokens[split:]
         train_dataloader = DataLoader(
-            train_tokens,
-            batch_size=batch_size,
-            context_size=context_size,
-            use_final_batch=use_final_batch,
+            train_tokens, batch_size=batch_size, context_size=context_size
         )
         val_dataloader = DataLoader(
-            val_tokens,
-            batch_size=batch_size,
-            context_size=context_size,
-            use_final_batch=use_final_batch,
+            val_tokens, batch_size=batch_size, context_size=context_size
         )
     else:
         train_dataloader = DataLoader(
-            tokens,
-            batch_size=batch_size,
-            context_size=context_size,
-            use_final_batch=use_final_batch,
+            tokens, batch_size=batch_size, context_size=context_size
         )
         val_dataloader = None
     return {"train": train_dataloader, "val": val_dataloader}
