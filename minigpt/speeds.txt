@@ -7,3 +7,5 @@ Using TF32
 On a faster machine - higher memory bandwidth
 49: train loss = 6.157435, time = 334ms, tok/s = 48985
 
+With bfloat16
+49: train loss = 6.156698, time = 312ms, tok/s = 52594
