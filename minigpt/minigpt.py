@@ -326,22 +326,22 @@ def main():
     max_training_iterations = 50
     model = train(model, loaders, opt, max_training_iterations)
 
-    model.eval()
-
-    start_ctx = tokenizer.encode("I'm a language model,")
-    tokens = []
-    tokens.extend(start_ctx)
-
-    written_text = ""
-    for token in sample_from_model(model, start_ctx=start_ctx, num_chars=10000):
-        tokens.append(token)
-        decoded = tokenizer.decode(tokens)
-        sys.stdout.write(decoded[len(written_text) :])
-        written_text = decoded
-
-    sample = tokenizer.decode(tokens)
-    Path("generated-sample.txt").write_text(sample)
-    torch.save(model.state_dict(), "model-minigpt.pth")
+    # model.eval()
+    #
+    # start_ctx = tokenizer.encode("I'm a language model,")
+    # tokens = []
+    # tokens.extend(start_ctx)
+    #
+    # written_text = ""
+    # for token in sample_from_model(model, start_ctx=start_ctx, num_chars=10000):
+    #     tokens.append(token)
+    #     decoded = tokenizer.decode(tokens)
+    #     sys.stdout.write(decoded[len(written_text) :])
+    #     written_text = decoded
+    #
+    # sample = tokenizer.decode(tokens)
+    # Path("generated-sample.txt").write_text(sample)
+    # torch.save(model.state_dict(), "model-minigpt.pth")
 
 
 def train(
