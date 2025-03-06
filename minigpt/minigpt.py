@@ -298,6 +298,7 @@ def main():
         path_corpus=Path("tinyshakespeare.txt"),
         batch_size=batch_size,
         val_split=0.2,
+        use_final_batch=False,
     )
     print(
         f"Done loading dataset. "
