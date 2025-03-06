@@ -371,6 +371,7 @@ def train(
             model.config.max_context_length,
         ):
             print(f"Skipping batch with {shape=}, would slow down torch.compile")
+            continue
         start = time.time()
         opt.zero_grad()
         with torch.autocast(device_type=device, dtype=torch.bfloat16):
