@@ -352,6 +352,7 @@ def train(
 ):
     # Move the model to GPU. For nn.Module, .to(device) modifies in-place
     model.to(device)
+    model = torch.compile(model)
     model.train()
     total_params = sum(p.numel() for p in model.parameters())
     print(f"Number of parameters: {total_params // 1e6}M parameters")
