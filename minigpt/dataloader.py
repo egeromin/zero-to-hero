@@ -69,7 +69,10 @@ class DataLoader:
 
     @property
     def num_batches(self) -> int:
-        num = len(self.labels)
+        num = len(self.labels) // self.batch_size
+        remainder = len(self.labels) % self.batch_size
+        if remainder:
+            num += 1
         if self.final_batch is not None:
             num += 1
         return num
