@@ -366,6 +366,11 @@ def train(
         total=max_training_iterations,
     ):
         assert X_batch.shape == Y_batch.shape
+        if (shape := tuple(X_batch.shape)) != (
+            loaders["train"].batch_size,
+            model.config.max_context_length,
+        ):
+            print(f"Skipping batch with {shape=}, would slow down torch.compile")
         start = time.time()
         opt.zero_grad()
         with torch.autocast(device_type=device, dtype=torch.bfloat16):
