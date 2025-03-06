@@ -388,18 +388,18 @@ def train(
             f"\n{i}: train loss = {train_loss_estimate:4f}, time = {elapsed * 1000:.0f}ms, tok/s = {tok_ps:.0f}"
         )
 
-        if i % measure_every == 0:
-            model.eval()
-            val_loss_estimate, val_accuracy_estimate = estimate_loss_and_accuracy(
-                model,
-                loaders["val"],
-            )
-            validation_losses.append(val_loss_estimate)
-            print(
-                f"val loss = {val_loss_estimate:4f}, "
-                f"val accuracy = {val_accuracy_estimate * 100:.2f}%"
-            )
-            model.train()
+        # if i % measure_every == 0:
+        #     model.eval()
+        #     val_loss_estimate, val_accuracy_estimate = estimate_loss_and_accuracy(
+        #         model,
+        #         loaders["val"],
+        #     )
+        #     validation_losses.append(val_loss_estimate)
+        #     print(
+        #         f"val loss = {val_loss_estimate:4f}, "
+        #         f"val accuracy = {val_accuracy_estimate * 100:.2f}%"
+        #     )
+        #     model.train()
 
     print(f"Number of parameters: {total_params // 1e6}M parameters")
     # Plot training and validation losses
