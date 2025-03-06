@@ -322,7 +322,7 @@ def main():
         ffw_use_gelu=True,
     )
     model = MiniGPT(config)
-    opt = AdamW(model.parameters(), lr=3e-4)
+    opt = AdamW(model.parameters(), lr=3e-4, betas=(0.9, 0.95), eps=1e-8)
     # max_training_iterations = 8_001
     max_training_iterations = 50
     model = train(model, loaders, opt, max_training_iterations)
@@ -384,6 +384,7 @@ def train(
             )
             loss.backward()
         train_losses.append(loss)
+        norm = torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
         opt.step()
         torch.cuda.synchronize()
         end = time.time()
@@ -396,7 +397,7 @@ def train(
             f"\n{i}: train loss = {train_loss_estimate:4f}, "
             f"time = {elapsed * 1000:.0f}ms, "
             f"tok/s = {tok_ps:.0f}, "
-            f"shape = {tuple(X_batch.shape)}"
+            f"norm = {norm:.4f}"
         )
 
         # if i % measure_every == 0:
