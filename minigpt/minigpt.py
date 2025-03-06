@@ -314,7 +314,7 @@ def main():
         head_size=768 // 12,
         num_heads=12,
         num_blocks=12,
-        use_flash_attention=False,
+        use_flash_attention=True,
         attention_bias=True,
         final_layer_bias=False,
         final_layer_norm=True,
