@@ -17,5 +17,5 @@ With flash attention
 49: train loss = 6.215732, time = 121ms, tok/s = 135158
 
 Using a nice number as vocab_size=50304
-49: train loss = 6.215691, time = 121ms, tok/s = 135308
+49: train loss = 6.212791, time = 105ms, tok/s = 156257
 
