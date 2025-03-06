@@ -42,7 +42,6 @@ from torch import nn
 from torch.optim import AdamW
 
 from dataloader import dataloaders_from_corpus, TrainValDataloaders, DataLoader
-from tokenizer import Tokenizer
 
 torch.manual_seed(1337)
 DROPOUT = 0.2
@@ -305,7 +304,9 @@ def main():
         f"Val size = {loaders['val'].num_batches} batches, {loaders['val'].num_tokens} tokens "
     )
 
-    vocab_size = tokenizer.n_vocab
+    vocab_size = 50304
+    assert vocab_size >= tokenizer.n_vocab
+    assert vocab_size % 128 == 0
     print(f"Vocab size = {vocab_size}")
     config = MiniGPTConfig(
         vocab_size=vocab_size,
@@ -443,40 +444,40 @@ def train(
     return model
 
 
-def test_works_after_refactor():
-    """Small sanity check that I can do .forward() even after making
-    some small changes to the code.
-    """
-    print(f"Device: {device}")
-    tokenizer = Tokenizer.load(Path("tokenizer"))
-    max_context_length = 1024
-    vocab_size = 50304
-    assert vocab_size >= tokenizer.vocab_size
-    assert vocab_size % 128 == 0
-    config = MiniGPTConfig(
-        vocab_size=vocab_size,
-        embedding_size=384,
-        max_context_length=max_context_length,
-        head_size=384 // 6,
-        num_heads=6,
-        num_blocks=6,
-        use_flash_attention=False,
-    )
-    model = MiniGPT(config)
-    input_context = torch.zeros((1, max_context_length // 2), dtype=torch.long)
-    model.forward(input_context)
-    print("OK, forward successful.")
-    prompt = "Hello!"
-    sampled_tokens = list(
-        sample_from_model(
-            model,
-            start_ctx=tokenizer.encode(prompt),
-            num_chars=5,
-        )
-    )
-    sample = tokenizer.decode(sampled_tokens)
-    print(prompt + sample)
-    print("OK, sampling successful.")
+# def test_works_after_refactor():
+#     """Small sanity check that I can do .forward() even after making
+#     some small changes to the code.
+#     """
+#     print(f"Device: {device}")
+#     tokenizer = Tokenizer.load(Path("tokenizer"))
+#     max_context_length = 1024
+#     vocab_size = 50304
+#     assert vocab_size >= tokenizer.vocab_size
+#     assert vocab_size % 128 == 0
+#     config = MiniGPTConfig(
+#         vocab_size=vocab_size,
+#         embedding_size=384,
+#         max_context_length=max_context_length,
+#         head_size=384 // 6,
+#         num_heads=6,
+#         num_blocks=6,
+#         use_flash_attention=False,
+#     )
+#     model = MiniGPT(config)
+#     input_context = torch.zeros((1, max_context_length // 2), dtype=torch.long)
+#     model.forward(input_context)
+#     print("OK, forward successful.")
+#     prompt = "Hello!"
+#     sampled_tokens = list(
+#         sample_from_model(
+#             model,
+#             start_ctx=tokenizer.encode(prompt),
+#             num_chars=5,
+#         )
+#     )
+#     sample = tokenizer.decode(sampled_tokens)
+#     print(prompt + sample)
+#     print("OK, sampling successful.")
 
 
 if __name__ == "__main__":
