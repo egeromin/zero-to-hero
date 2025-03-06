@@ -366,17 +366,17 @@ def train(
     ):
         start = time.time()
         opt.zero_grad()
-        logits = model.forward(X_batch)
-        # Calculate the loss for each of the tokens in the input
-        loss = F.cross_entropy(
-            logits.view(-1, model.config.vocab_size),
-            Y_batch.view(-1),
-        )
+        with torch.autocast(device_type=device, dtype=torch.bfloat16):
+            logits = model.forward(X_batch)
+            # Calculate the loss for each of the tokens in the input
+            loss = F.cross_entropy(
+                logits.view(-1, model.config.vocab_size),
+                Y_batch.view(-1),
+            )
+            loss.backward()
         train_losses.append(loss)
-        loss.backward()
         opt.step()
-        if device == "cuda":
-            torch.cuda.synchronize()
+        torch.cuda.synchronize()
         end = time.time()
         elapsed = end - start
         n_tok = X_batch.shape[0] * X_batch.shape[1]
