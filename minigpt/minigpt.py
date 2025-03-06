@@ -341,7 +341,7 @@ def main():
         ffw_use_gelu=True,
     )
     model = MiniGPT(config)
-    opt = AdamW(model.parameters(), lr=3e-4, betas=(0.9, 0.95), eps=1e-8)
+    opt = initialize_optimizer(model)
     # max_training_iterations = 8_001
     max_training_iterations = 50
     model = train(model, loaders, opt, max_training_iterations)
@@ -362,6 +362,22 @@ def main():
     # sample = tokenizer.decode(tokens)
     # Path("generated-sample.txt").write_text(sample)
     # torch.save(model.state_dict(), "model-minigpt.pth")
+
+
+def initialize_optimizer(model: MiniGPT) -> torch.optim.Optimizer:
+    decay_params = {
+        pn: p for pn, p in model.named_parameters() if p.requires_grad and p.dim() >= 2
+    }
+    nodecay_params = {
+        pn: p for pn, p in model.named_parameters() if p.requires_grad and p.dim() < 2
+    }
+    weight_decay = 0.1
+    optim_groups = [
+        {"params": decay_params, "weight_decay": weight_decay},
+        {"params": nodecay_params, "weight_decay": 0.0},
+    ]
+    opt = AdamW(optim_groups, lr=3e-4, betas=(0.9, 0.95), eps=1e-8, fused=True)
+    return opt
 
 
 def train(
