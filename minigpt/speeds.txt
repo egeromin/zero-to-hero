@@ -16,3 +16,6 @@ With torch.compile
 With flash attention
 49: train loss = 6.215732, time = 121ms, tok/s = 135158
 
+Using a nice number as vocab_size=50304
+49: train loss = 6.215691, time = 121ms, tok/s = 135308
+
