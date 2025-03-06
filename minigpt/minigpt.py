@@ -383,8 +383,8 @@ def train(
                 Y_batch.view(-1),
             )
             loss.backward()
+            norm = torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
         train_losses.append(loss)
-        norm = torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
         opt.step()
         torch.cuda.synchronize()
         end = time.time()
