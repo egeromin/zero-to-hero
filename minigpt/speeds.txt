@@ -28,3 +28,5 @@ with learning rate scheduler
 fused AdamW
 49: train loss = 6.432898, time = 368ms, tok/s = 44572, norm = 0.3134, lr = 0.000061,
 
+using gradient accumulation * 32
+4: train loss = 9.256497, time = 11614ms, tok/s = 45142, norm = 2.2987, lr = 0.002460,
