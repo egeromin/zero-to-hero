@@ -306,8 +306,10 @@ def main():
             sys.exit(1)
     print(f"Device: {device}")
     print("Loading dataset...")
+    total_batch_size = 524288
     context_size = 1024
     batch_size = 16
+    assert total_batch_size % (context_size * batch_size) == 0
     # tokenizer = Tokenizer.load(Path("tokenizer"))  # my own tokenizer
     tokenizer = tiktoken.get_encoding("gpt2")  # use tiktoken
     loaders = dataloaders_from_corpus(
@@ -344,7 +346,7 @@ def main():
     opt = initialize_optimizer(model)
     # max_training_iterations = 8_001
     max_training_iterations = 50
-    model = train(model, loaders, opt, max_training_iterations)
+    model = train(model, loaders, opt, max_training_iterations, total_batch_size)
 
     # model.eval()
     #
@@ -385,6 +387,7 @@ def train(
     loaders: TrainValDataloaders,
     opt: torch.optim.Optimizer,
     max_training_iterations: int,
+    total_batch_size: int | None = None,
 ):
     # Move the model to GPU. For nn.Module, .to(device) modifies in-place
     model.to(device)
@@ -397,30 +400,45 @@ def train(
     validation_losses = []
     measure_every = 500
     warmup_steps = 10
+    batch_size = loaders["train"].batch_size
 
-    for i, (X_batch, Y_batch) in tqdm.tqdm(
-        zip(range(max_training_iterations), loaders["train"]),
-        total=max_training_iterations,
-    ):
-        assert X_batch.shape == Y_batch.shape
-        if (shape := tuple(X_batch.shape)) != (
-            loaders["train"].batch_size,
-            model.config.max_context_length,
-        ):
-            print(f"Skipping batch with {shape=}, would slow down torch.compile")
-            continue
+    if total_batch_size is None:
+        total_batch_size = batch_size * model.config.max_context_length
+
+    grad_accum_steps = total_batch_size // (
+        batch_size * model.config.max_context_length
+    )
+    print(f"Training with {grad_accum_steps} gradient accumulation steps")
+
+    for i in tqdm.tqdm(range(max_training_iterations)):
         start = time.time()
         opt.zero_grad()
-        with torch.autocast(device_type=device, dtype=torch.bfloat16):
-            logits = model.forward(X_batch)
-            # Calculate the loss for each of the tokens in the input
-            loss = F.cross_entropy(
-                logits.view(-1, model.config.vocab_size),
-                Y_batch.view(-1),
-            )
-            loss.backward()
-            norm = torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
-        train_losses.append(loss)
+        loss_accum = 0.0
+        num_accum_steps = 0
+        while num_accum_steps < grad_accum_steps:
+            X_batch, Y_batch = next(loaders["train"])
+            assert X_batch.shape == Y_batch.shape
+            if (shape := tuple(X_batch.shape)) != (
+                batch_size,
+                model.config.max_context_length,
+            ):
+                # TODO: bleah, should move this directly to the data loader.
+                print(f"Skipping batch with {shape=}, would slow down torch.compile")
+                continue
+            num_accum_steps += 1
+            with torch.autocast(device_type=device, dtype=torch.bfloat16):
+                logits = model.forward(X_batch)
+                # Calculate the loss for each of the tokens in the input
+                loss = F.cross_entropy(
+                    logits.view(-1, model.config.vocab_size),
+                    Y_batch.view(-1),
+                )
+                loss = loss / grad_accum_steps
+                loss.backward()
+                loss_accum += loss.detach()
+
+        norm = torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
+        train_losses.append(loss_accum)
         learning_rate = gpt2_learning_rate_schedule(
             i, warmup_steps, max_training_iterations
         )
