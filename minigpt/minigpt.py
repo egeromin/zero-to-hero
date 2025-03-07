@@ -365,12 +365,12 @@ def main():
 
 
 def initialize_optimizer(model: MiniGPT) -> torch.optim.Optimizer:
-    decay_params = {
-        pn: p for pn, p in model.named_parameters() if p.requires_grad and p.dim() >= 2
-    }
-    nodecay_params = {
-        pn: p for pn, p in model.named_parameters() if p.requires_grad and p.dim() < 2
-    }
+    decay_params = [
+        p for _pn, p in model.named_parameters() if p.requires_grad and p.dim() >= 2
+    ]
+    nodecay_params = [
+        p for _pn, p in model.named_parameters() if p.requires_grad and p.dim() < 2
+    ]
     weight_decay = 0.1
     optim_groups = [
         {"params": decay_params, "weight_decay": weight_decay},
@@ -438,7 +438,8 @@ def train(
             f"\n{i}: train loss = {train_loss_estimate:4f}, "
             f"time = {elapsed * 1000:.0f}ms, "
             f"tok/s = {tok_ps:.0f}, "
-            f"norm = {norm:.4f}"
+            f"norm = {norm:.4f}, "
+            f"lr = {learning_rate:.6f}, "
         )
 
         # if i % measure_every == 0:
