@@ -410,13 +410,15 @@ def train(
     )
     print(f"Training with {grad_accum_steps} gradient accumulation steps")
 
+    train_loader_iter = iter(loaders["train"])
+
     for i in tqdm.tqdm(range(max_training_iterations)):
         start = time.time()
         opt.zero_grad()
         loss_accum = 0.0
         num_accum_steps = 0
         while num_accum_steps < grad_accum_steps:
-            X_batch, Y_batch = next(loaders["train"])
+            X_batch, Y_batch = next(train_loader_iter)
             assert X_batch.shape == Y_batch.shape
             if (shape := tuple(X_batch.shape)) != (
                 batch_size,
