@@ -31,6 +31,7 @@ import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable
+from os import environ as env
 
 import tiktoken
 import torch
@@ -43,14 +44,30 @@ from torch.optim import AdamW
 
 from dataloader import dataloaders_from_corpus, TrainValDataloaders, DataLoader
 
+# Initialise cuda and ddp, if available
 torch.manual_seed(1337)
 DROPOUT = 0.2
-device = "cuda" if torch.cuda.is_available() else "cpu"
-if device == "cuda":
+using_cuda = torch.cuda.is_available()
+device = "cpu"
+ddp_rank = 0
+ddp_local_rank = 0
+ddp_world_size = 1
+master_process = True
+if using_cuda:
+    device = "cuda"
     torch.cuda.manual_seed(1337)
     print(f"Using {device}, matplotlib in Agg mode")
     matplotlib.use("Agg")
     torch.set_float32_matmul_precision("high")
+using_ddp = int(env.get("RANK", -1)) != "-1"
+if using_ddp:
+    assert using_cuda
+    ddp_rank = int(env["RANK"])
+    ddp_local_rank = int(env["LOCAL_RANK"])
+    ddp_world_size = int(env["WORLD_SIZE"])
+    device = f"cuda:{ddp_local_rank}"
+    torch.cuda.set_device(device)
+    master_process = ddp_rank == 0
 
 
 @torch.no_grad()
@@ -304,8 +321,9 @@ def main():
         if device != "cuda":
             print("Cuda not available on current system. Aborting")
             sys.exit(1)
-    print(f"Device: {device}")
-    print("Loading dataset...")
+    if master_process:
+        print(f"Device: {device}")
+        print("Loading dataset...")
     total_batch_size = 524288
     context_size = 1024
     batch_size = 16
@@ -318,6 +336,8 @@ def main():
         path_corpus=Path("tinyshakespeare.txt"),
         batch_size=batch_size,
         val_split=0.2,
+        ddp_rank=ddp_rank,
+        ddp_world_size=ddp_world_size,
     )
     print(
         f"Done loading dataset. "
@@ -416,21 +436,13 @@ def train(
         start = time.time()
         opt.zero_grad()
         loss_accum = 0.0
-        num_accum_steps = 0
-        while num_accum_steps < grad_accum_steps:
+        for _ in range(grad_accum_steps):
             X_batch, Y_batch = next(train_loader_iter)
             assert X_batch.shape == Y_batch.shape
-            if (shape := tuple(X_batch.shape)) != (
-                batch_size,
-                model.config.max_context_length,
-            ):
-                # TODO: bleah, should move this directly to the data loader.
-                print(f"Skipping batch with {shape=}, would slow down torch.compile")
-                continue
-            num_accum_steps += 1
+
             with torch.autocast(device_type=device, dtype=torch.bfloat16):
                 logits = model.forward(X_batch)
-                # Calculate the loss for each of the tokens in the input)
+                # Calculate the loss for each of the tokens in the input
                 loss = F.cross_entropy(
                     logits.view(-1, model.config.vocab_size),
                     Y_batch.view(-1),

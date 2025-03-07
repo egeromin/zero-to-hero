@@ -3,8 +3,6 @@ from typing import Protocol, Iterator, TypedDict
 
 import torch
 
-device = "cuda" if torch.cuda.is_available() else "cpu"
-
 
 class TokenizerInterface(Protocol):
     def encode(self, text: str) -> list[int]: ...
@@ -26,69 +24,38 @@ class DataLoader:
         tokens: list[int],
         batch_size: int,
         context_size: int,
-        shuffle: bool = True,
+        ddp_rank: int = 0,
+        ddp_world_size: int = 1,
     ):
         self.tokens = tokens
         self.batch_size = batch_size
         self.context_size = context_size
-        self.shuffle = shuffle
-
-        remainder = (len(self.tokens) - 1) % self.context_size
-        self.final_batch = None
-        self.final_labels = None
-        if remainder:
-            print(f"There is a final batch of {remainder} tokens.")
-            final_batch = torch.tensor([self.tokens[-remainder:-1]], dtype=torch.long)
-            final_labels = torch.tensor(
-                [self.tokens[-remainder + 1 :]], dtype=torch.long
-            )
-            self.final_batch, self.final_labels = (
-                final_batch.to(device),
-                final_labels.to(device),
-            )
-
-        inputs = torch.tensor(self.tokens[: -remainder - 1], dtype=torch.long).view(
-            -1, self.context_size
-        )
-        labels = torch.tensor(self.tokens[1:-remainder], dtype=torch.long).view(
-            -1, self.context_size
-        )
-        assert inputs.shape == labels.shape
-        if self.shuffle:
-            perm = torch.randperm(len(inputs))
-            inputs = inputs[perm]
-            labels = labels[perm]
-        self.inputs, self.labels = inputs.to(device), labels.to(device)
+        self.ddp_rank = ddp_rank
+        self.ddp_world_size = ddp_world_size
 
     @property
     def num_tokens(self) -> int:
-        num = self.labels.shape[0] * self.labels.shape[1]
-        if self.final_batch is not None:
-            num += self.final_batch.shape[1]
-        return int(num)
+        remainder = len(self.tokens) % (self.batch_size * self.context_size)
+        return len(self.tokens) - remainder
 
     @property
     def num_batches(self) -> int:
-        num = len(self.labels) // self.batch_size
-        remainder = len(self.labels) % self.batch_size
-        if remainder:
-            num += 1
-        if self.final_batch is not None:
-            num += 1
-        return num
+        return len(self.tokens) // (self.batch_size * self.context_size)
 
     def __iter__(self) -> Iterator[tuple[torch.tensor, torch.tensor]]:
-        batch_start_idx: int = 0
+        start_pos = self.ddp_rank * self.batch_size * self.context_size
+        current_pos = start_pos
+        stride = self.batch_size * self.context_size * self.ddp_world_size
+
         while True:
-            yield (
-                self.inputs[batch_start_idx : batch_start_idx + self.batch_size],
-                self.labels[batch_start_idx : batch_start_idx + self.batch_size],
-            )
-            batch_start_idx += self.batch_size
-            if batch_start_idx >= len(self.inputs):
-                if self.final_batch is not None:
-                    yield self.final_batch, self.final_labels
-                batch_start_idx = 0
+            inputs = self.tokens[current_pos:current_pos + stride]
+            labels = self.tokens[current_pos+1:current_pos + stride+1]
+            inputs_tensor = torch.tensor(inputs, dtype=torch.long).view(self.batch_size, self.context_size)
+            labels_tensor = torch.tensor(labels, dtype=torch.long).view(self.batch_size, self.context_size)
+            yield inputs_tensor, labels_tensor
+            current_pos += stride
+            if current_pos >= len(self.tokens):
+                current_pos = start_pos
 
 
 class TrainValDataloaders(TypedDict):
@@ -102,6 +69,8 @@ def dataloaders_from_corpus(
     batch_size: int,
     context_size: int,
     val_split: float | None = None,
+    ddp_rank: int = 0,
+    ddp_world_size: int = 1,
 ) -> TrainValDataloaders:
     corpus = path_corpus.read_text()
     print("Encoding corpus...")
@@ -112,14 +81,14 @@ def dataloaders_from_corpus(
         train_tokens = tokens[:split]
         val_tokens = tokens[split:]
         train_dataloader = DataLoader(
-            train_tokens, batch_size=batch_size, context_size=context_size
+            train_tokens, batch_size=batch_size, context_size=context_size, ddp_rank=ddp_rank, ddp_world_size=ddp_world_size
         )
         val_dataloader = DataLoader(
-            val_tokens, batch_size=batch_size, context_size=context_size
+            val_tokens, batch_size=batch_size, context_size=context_size, ddp_rank=ddp_rank, ddp_world_size=ddp_world_size
         )
     else:
         train_dataloader = DataLoader(
-            tokens, batch_size=batch_size, context_size=context_size
+            tokens, batch_size=batch_size, context_size=context_size, ddp_rank=ddp_rank, ddp_world_size=ddp_world_size
         )
         val_dataloader = None
     return {"train": train_dataloader, "val": val_dataloader}
