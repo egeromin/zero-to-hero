@@ -24,3 +24,7 @@ Benchmark on a slower machine
 
 with learning rate scheduler
 49: train loss = 6.431539, time = 374ms, tok/s = 43864, norm = 0.3091
+
+fused AdamW
+49: train loss = 6.432898, time = 368ms, tok/s = 44572, norm = 0.3134, lr = 0.000061,
+
