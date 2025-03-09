@@ -437,7 +437,7 @@ def train(
         total_batch_size = batch_size * raw_model.config.max_context_length
 
     grad_accum_steps = total_batch_size // (
-        batch_size * raw_model.config.max_context_length
+        batch_size * raw_model.config.max_context_length * ddp_world_size
     )
     if master_process:
         print(f"Training with {grad_accum_steps} gradient accumulation steps")
