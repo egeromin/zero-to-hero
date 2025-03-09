@@ -418,9 +418,9 @@ def train(
 ):
     model.to(device)
     model = torch.compile(model)
+    raw_model = model
     if using_ddp:
         model = DDP(model, device_ids=[ddp_local_rank])
-    raw_model = model
     # Move the model to GPU. For nn.Module, .to(device) modifies in-place
     model.train()
     total_params = sum(p.numel() for p in model.parameters())
