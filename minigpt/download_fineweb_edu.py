@@ -57,7 +57,7 @@ def download_dataset():
             remaining_tokens = tokens[remaining_capacity:]
             to_write = tokens[:remaining_capacity]
             save_tokens(to_write, file_shard)
-            num_tokens_in_shard = num_tokens_in_shard + len(to_write)
+            num_tokens_in_shard += len(to_write)
             progress_bar.update(len(to_write))
             if num_tokens_in_shard >= max_tokens_per_shard:
                 file_shard.flush()
