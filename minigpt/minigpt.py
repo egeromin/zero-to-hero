@@ -40,6 +40,7 @@ import tqdm
 import matplotlib
 from matplotlib import pyplot as plt
 from torch import nn
+from torch.distributed import init_process_group
 from torch.optim import AdamW
 from torch import distributed as dist
 from torch.nn.parallel import DistributedDataParallel as DDP
@@ -63,6 +64,7 @@ if using_cuda:
 using_ddp = int(env.get("RANK", -1)) != "-1"
 if using_ddp:
     assert using_cuda
+    init_process_group(backend="nccl")
     ddp_rank = int(env["RANK"])
     ddp_local_rank = int(env["LOCAL_RANK"])
     ddp_world_size = int(env["WORLD_SIZE"])
