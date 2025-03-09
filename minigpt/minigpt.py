@@ -451,6 +451,7 @@ def train(
         for j in range(grad_accum_steps):
             X_batch, Y_batch = next(train_loader_iter)
             assert X_batch.shape == Y_batch.shape
+            X_batch, Y_batch = X_batch.to(device), Y_batch.to(device)
 
             with torch.autocast(device_type=device, dtype=torch.bfloat16):
                 if using_ddp:
