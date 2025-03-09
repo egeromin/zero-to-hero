@@ -27,9 +27,9 @@ def encode_doc(doc: dict) -> list[int]:
     return tokens
 
 
-def save_tokens(tokens: list[int], file: io.BinaryIO):
+def save_tokens(tokens: list[int], file: io.FileIO):
     tokens_np = np.array(tokens, dtype=np.uint16)
-    np.save(file, tokens_np)
+    tokens_np.tofile(file)
 
 
 def download_dataset():
@@ -40,7 +40,7 @@ def download_dataset():
     dataset_dir.mkdir(exist_ok=True)
 
     # 100M tokens per shard, 100 shards in total
-    max_tokens_per_shard = 1e8
+    max_tokens_per_shard = int(1e8)
     current_shard = 0
     num_tokens_in_shard = 0
     progress_bar = tqdm(
@@ -51,7 +51,7 @@ def download_dataset():
 
     num_processes = 2 * cpu_count()
     with Pool(processes=num_processes) as pool:
-        for tokens in pool.imap(fw, encode_doc, chunksize=16):
+        for tokens in pool.imap(encode_doc, fw, chunksize=16):
             tokens = remaining_tokens + tokens
             remaining_capacity = max_tokens_per_shard - num_tokens_in_shard
             remaining_tokens = tokens[remaining_capacity:]
