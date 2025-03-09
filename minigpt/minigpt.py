@@ -414,12 +414,12 @@ def train(
     max_training_iterations: int,
     total_batch_size: int | None = None,
 ):
+    model.to(device)
     model = torch.compile(model)
     if using_ddp:
         model = DDP(model, device_ids=[ddp_local_rank])
     raw_model = model
     # Move the model to GPU. For nn.Module, .to(device) modifies in-place
-    model.to(device)
     model.train()
     total_params = sum(p.numel() for p in model.parameters())
     if master_process:
