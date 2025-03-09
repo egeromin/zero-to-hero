@@ -33,3 +33,6 @@ using gradient accumulation * 32
 
 new benchmark on new machine - grad accum * 32
 3: train loss = 9.711056, time = 2930ms, tok/s = 178957, norm = 18.3870, lr = 0.001860,
+
+with DDP on 2 GPUs
+26: train loss = 6.490913, time = 1515ms, tok/s = 346088, norm = 0.4315, lr = 0.000413,
