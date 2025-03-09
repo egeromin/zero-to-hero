@@ -43,13 +43,14 @@ class DataLoader:
         return len(self.tokens) // (self.batch_size * self.context_size)
 
     def __iter__(self) -> Iterator[tuple[torch.tensor, torch.tensor]]:
-        start_pos = self.ddp_rank * self.batch_size * self.context_size
-        current_pos = start_pos
-        stride = self.batch_size * self.context_size * self.ddp_world_size
+        n_tokens_in_batch = self.batch_size * self.context_size
+        start_pos = self.ddp_rank * n_tokens_in_batch
+        stride = n_tokens_in_batch * self.ddp_world_size
 
+        current_pos = start_pos
         while True:
-            inputs = self.tokens[current_pos : current_pos + stride]
-            labels = self.tokens[current_pos + 1 : current_pos + stride + 1]
+            inputs = self.tokens[current_pos : current_pos + n_tokens_in_batch]
+            labels = self.tokens[current_pos + 1 : current_pos + n_tokens_in_batch + 1]
             inputs_tensor = torch.tensor(inputs, dtype=torch.long).view(
                 self.batch_size, self.context_size
             )
@@ -58,7 +59,7 @@ class DataLoader:
             )
             yield inputs_tensor, labels_tensor
             current_pos += stride
-            if current_pos + stride + 1 > len(self.tokens):
+            if current_pos + n_tokens_in_batch + 1 > len(self.tokens):
                 current_pos = start_pos
 
 
