@@ -48,10 +48,14 @@ class DataLoader:
         stride = self.batch_size * self.context_size * self.ddp_world_size
 
         while True:
-            inputs = self.tokens[current_pos:current_pos + stride]
-            labels = self.tokens[current_pos+1:current_pos + stride+1]
-            inputs_tensor = torch.tensor(inputs, dtype=torch.long).view(self.batch_size, self.context_size)
-            labels_tensor = torch.tensor(labels, dtype=torch.long).view(self.batch_size, self.context_size)
+            inputs = self.tokens[current_pos : current_pos + stride]
+            labels = self.tokens[current_pos + 1 : current_pos + stride + 1]
+            inputs_tensor = torch.tensor(inputs, dtype=torch.long).view(
+                self.batch_size, self.context_size
+            )
+            labels_tensor = torch.tensor(labels, dtype=torch.long).view(
+                self.batch_size, self.context_size
+            )
             yield inputs_tensor, labels_tensor
             current_pos += stride
             if current_pos >= len(self.tokens):
@@ -81,14 +85,26 @@ def dataloaders_from_corpus(
         train_tokens = tokens[:split]
         val_tokens = tokens[split:]
         train_dataloader = DataLoader(
-            train_tokens, batch_size=batch_size, context_size=context_size, ddp_rank=ddp_rank, ddp_world_size=ddp_world_size
+            train_tokens,
+            batch_size=batch_size,
+            context_size=context_size,
+            ddp_rank=ddp_rank,
+            ddp_world_size=ddp_world_size,
         )
         val_dataloader = DataLoader(
-            val_tokens, batch_size=batch_size, context_size=context_size, ddp_rank=ddp_rank, ddp_world_size=ddp_world_size
+            val_tokens,
+            batch_size=batch_size,
+            context_size=context_size,
+            ddp_rank=ddp_rank,
+            ddp_world_size=ddp_world_size,
         )
     else:
         train_dataloader = DataLoader(
-            tokens, batch_size=batch_size, context_size=context_size, ddp_rank=ddp_rank, ddp_world_size=ddp_world_size
+            tokens,
+            batch_size=batch_size,
+            context_size=context_size,
+            ddp_rank=ddp_rank,
+            ddp_world_size=ddp_world_size,
         )
         val_dataloader = None
     return {"train": train_dataloader, "val": val_dataloader}
