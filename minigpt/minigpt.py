@@ -56,7 +56,6 @@ master_process = True
 if using_cuda:
     device = "cuda"
     torch.cuda.manual_seed(1337)
-    print(f"Using {device}, matplotlib in Agg mode")
     matplotlib.use("Agg")
     torch.set_float32_matmul_precision("high")
 using_ddp = int(env.get("RANK", -1)) != "-1"
@@ -339,16 +338,18 @@ def main():
         ddp_rank=ddp_rank,
         ddp_world_size=ddp_world_size,
     )
-    print(
-        f"Done loading dataset. "
-        f"Train size = {loaders['train'].num_batches} batches, {loaders['train'].num_tokens} tokens "
-        f"Val size = {loaders['val'].num_batches} batches, {loaders['val'].num_tokens} tokens "
-    )
+    if master_process:
+        print(
+            f"Done loading dataset. "
+            f"Train size = {loaders['train'].num_batches} batches, {loaders['train'].num_tokens} tokens "
+            f"Val size = {loaders['val'].num_batches} batches, {loaders['val'].num_tokens} tokens "
+        )
 
     vocab_size = 50304
     assert vocab_size >= tokenizer.n_vocab
     assert vocab_size % 128 == 0
-    print(f"Vocab size = {vocab_size}")
+    if master_process:
+        print(f"Vocab size = {vocab_size}")
     config = MiniGPTConfig(
         vocab_size=vocab_size,
         embedding_size=768,
@@ -414,7 +415,8 @@ def train(
     model = torch.compile(model)
     model.train()
     total_params = sum(p.numel() for p in model.parameters())
-    print(f"Number of parameters: {total_params // 1e6}M parameters")
+    if master_process:
+        print(f"Number of parameters: {total_params // 1e6}M parameters")
 
     train_losses = []
     validation_losses = []
@@ -428,7 +430,8 @@ def train(
     grad_accum_steps = total_batch_size // (
         batch_size * model.config.max_context_length
     )
-    print(f"Training with {grad_accum_steps} gradient accumulation steps")
+    if master_process:
+        print(f"Training with {grad_accum_steps} gradient accumulation steps")
 
     train_loader_iter = iter(loaders["train"])
 
@@ -466,13 +469,14 @@ def train(
         tok_ps = n_tok / elapsed
 
         train_loss_estimate = sum(train_losses[-20:]) / len(train_losses[-20:])
-        print(
-            f"\n{i}: train loss = {train_loss_estimate:4f}, "
-            f"time = {elapsed * 1000:.0f}ms, "
-            f"tok/s = {tok_ps:.0f}, "
-            f"norm = {norm:.4f}, "
-            f"lr = {learning_rate:.6f}, "
-        )
+        if master_process:
+            print(
+                f"\n{i}: train loss = {train_loss_estimate:4f}, "
+                f"time = {elapsed * 1000:.0f}ms, "
+                f"tok/s = {tok_ps:.0f}, "
+                f"norm = {norm:.4f}, "
+                f"lr = {learning_rate:.6f}, "
+            )
 
         # if i % measure_every == 0:
         #     model.eval()
@@ -486,8 +490,8 @@ def train(
         #         f"val accuracy = {val_accuracy_estimate * 100:.2f}%"
         #     )
         #     model.train()
-
-    print(f"Number of parameters: {total_params // 1e6}M parameters")
+    if master_process:
+        print(f"Number of parameters: {total_params // 1e6}M parameters")
     # Plot training and validation losses
     fig, axes = plt.subplots(nrows=2, ncols=1, figsize=(4, 8))
     average_every = 20
