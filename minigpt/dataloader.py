@@ -58,7 +58,7 @@ class DataLoader:
             )
             yield inputs_tensor, labels_tensor
             current_pos += stride
-            if current_pos >= len(self.tokens):
+            if current_pos + stride + 1 > len(self.tokens):
                 current_pos = start_pos
 
 
