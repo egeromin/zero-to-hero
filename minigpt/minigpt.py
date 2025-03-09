@@ -41,6 +41,8 @@ import matplotlib
 from matplotlib import pyplot as plt
 from torch import nn
 from torch.optim import AdamW
+from torch import distributed as dist
+from torch.nn.parallel import DistributedDataParallel as DDP
 
 from dataloader import dataloaders_from_corpus, TrainValDataloaders, DataLoader
 
@@ -386,6 +388,8 @@ def main():
     # Path("generated-sample.txt").write_text(sample)
     # torch.save(model.state_dict(), "model-minigpt.pth")
 
+    dist.destroy_process_group()
+
 
 def initialize_optimizer(model: MiniGPT) -> torch.optim.Optimizer:
     decay_params = [
@@ -410,6 +414,9 @@ def train(
     max_training_iterations: int,
     total_batch_size: int | None = None,
 ):
+    if using_ddp:
+        model = DDP(model, device_ids=[ddp_local_rank])
+    raw_model = model
     # Move the model to GPU. For nn.Module, .to(device) modifies in-place
     model.to(device)
     model = torch.compile(model)
@@ -425,10 +432,10 @@ def train(
     batch_size = loaders["train"].batch_size
 
     if total_batch_size is None:
-        total_batch_size = batch_size * model.config.max_context_length
+        total_batch_size = batch_size * raw_model.config.max_context_length
 
     grad_accum_steps = total_batch_size // (
-        batch_size * model.config.max_context_length
+        batch_size * raw_model.config.max_context_length
     )
     if master_process:
         print(f"Training with {grad_accum_steps} gradient accumulation steps")
@@ -439,20 +446,27 @@ def train(
         start = time.time()
         opt.zero_grad()
         loss_accum = 0.0
-        for _ in range(grad_accum_steps):
+        for j in range(grad_accum_steps):
             X_batch, Y_batch = next(train_loader_iter)
             assert X_batch.shape == Y_batch.shape
 
             with torch.autocast(device_type=device, dtype=torch.bfloat16):
+                if using_ddp:
+                    # Synchronize gradients only for the last step in the gradient accumulation
+                    model.require_backward_grad_sync = j == grad_accum_steps - 1
                 logits = model.forward(X_batch)
                 # Calculate the loss for each of the tokens in the input
                 loss = F.cross_entropy(
-                    logits.view(-1, model.config.vocab_size),
+                    logits.view(-1, raw_model.config.vocab_size),
                     Y_batch.view(-1),
                 )
                 loss = loss / grad_accum_steps
                 loss.backward()
                 loss_accum += loss.detach()
+
+        if using_ddp:
+            # Average the accumulated loss across all devices.
+            dist.all_reduce(loss_accum, op=dist.ReduceOp.AVG)
 
         norm = torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
         train_losses.append(loss_accum)
@@ -465,7 +479,7 @@ def train(
         torch.cuda.synchronize()
         end = time.time()
         elapsed = end - start
-        n_tok = X_batch.shape[0] * X_batch.shape[1] * grad_accum_steps
+        n_tok = X_batch.shape[0] * X_batch.shape[1] * grad_accum_steps * ddp_world_size
         tok_ps = n_tok / elapsed
 
         train_loss_estimate = sum(train_losses[-20:]) / len(train_losses[-20:])
@@ -481,7 +495,7 @@ def train(
         # if i % measure_every == 0:
         #     model.eval()
         #     val_loss_estimate, val_accuracy_estimate = estimate_loss_and_accuracy(
-        #         model,
+        #         raw_model,
         #         loaders["val"],
         #     )
         #     validation_losses.append(val_loss_estimate)
