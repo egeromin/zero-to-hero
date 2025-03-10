@@ -165,10 +165,30 @@ def main():
         print(x)
         print(y)
 
-        
+
 def test_from_files():
-    pass
+    dataloader = DataLoader(
+        files=[
+            Path(f"test-dataloader/batch_{i}.npy")
+            for i in range(10)
+        ],
+        batch_size=16,
+        context_size=1024
+    )
+    train = []
+    labels = []
+    max_to_fetch = 1000000
+    while len(train) < max_to_fetch:
+        for train_t, labels_t in dataloader:
+            train += train_t.view(-1).tolist()
+            labels += labels_t.view(-1).tolist()
+    train = train[:max_to_fetch]
+    labels = labels[:max_to_fetch]
+    assert train == list(range(max_to_fetch))
+    assert labels == list(range(1, max_to_fetch+1))
+
+    # TODO: test with different values of world_size and ddp_rank
 
 
 if __name__ == "__main__":
-    main()
+    test_from_files()
