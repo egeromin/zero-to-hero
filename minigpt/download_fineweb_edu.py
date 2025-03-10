@@ -47,7 +47,7 @@ def download_dataset():
         total=max_tokens_per_shard, unit="tokens", desc=f"Shard {current_shard}"
     )
     remaining_tokens = []
-    file_shard = (dataset_dir / "val.npy").open("wb")
+    file_shard = (dataset_dir / "val-0.npy").open("wb")
 
     num_processes = 2 * cpu_count()
     with Pool(processes=num_processes) as pool:
