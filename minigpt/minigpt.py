@@ -46,7 +46,7 @@ from torch.optim import AdamW
 from torch import distributed as dist
 from torch.nn.parallel import DistributedDataParallel as DDP
 
-from dataloader import dataloaders_from_corpus, TrainValDataloaders, DataLoader
+from dataloader import TrainValDataloaders, DataLoader
 
 # Initialise cuda and ddp, if available
 torch.manual_seed(1337)
@@ -349,10 +349,7 @@ def main():
     tokenizer = tiktoken.get_encoding("gpt2")  # use tiktoken
     loaders = TrainValDataloaders(
         train=DataLoader(
-            files=[
-                Path(f"fineweb-edu/train-{i}.npy")
-                for i in range(1, 100)
-            ],
+            files=[Path(f"fineweb-edu/train-{i}.npy") for i in range(1, 100)],
             context_size=context_size,
             batch_size=batch_size,
             ddp_rank=ddp_rank,
@@ -360,15 +357,13 @@ def main():
             max_tokens_to_load=int(1e7),
         ),
         val=DataLoader(
-            files=[
-                Path("fineweb-edu/val-0.npy")
-            ],
+            files=[Path("fineweb-edu/val-0.npy")],
             context_size=context_size,
             batch_size=batch_size,
             ddp_rank=ddp_rank,
             ddp_world_size=ddp_world_size,
             max_tokens_to_load=int(1e7),
-        )
+        ),
     )
     if master_process:
         print(
@@ -523,15 +518,18 @@ def train(
                 f"norm = {norm:.4f}, "
                 f"lr = {learning_rate:.6f}, "
             )
-            wandb.log({
-                "train/loss": loss_accum,
-                "train/learning_rate": learning_rate,
-                "train/norm": norm,
-                "performance/tokens_per_second": tok_ps,
-                "performance/batch_time_seconds": elapsed,
-                "progress/step": step,
-                "progress/tokens_processed": n_tok
-            }, step=step)
+            wandb.log(
+                {
+                    "train/loss": loss_accum,
+                    "train/learning_rate": learning_rate,
+                    "train/norm": norm,
+                    "performance/tokens_per_second": tok_ps,
+                    "performance/batch_time_seconds": elapsed,
+                    "progress/step": step,
+                    "progress/tokens_processed": n_tok,
+                },
+                step=step,
+            )
 
         if step % measure_every == 0:
             model.eval()
@@ -546,11 +544,14 @@ def train(
                     f"val loss = {val_loss_estimate:4f}, "
                     f"val accuracy = {val_accuracy_estimate * 100:.2f}%"
                 )
-                wandb.log({
-                    "validation/loss": val_loss_estimate,
-                    "validation/accuracy": val_accuracy_estimate,
-                    "progress/step": step,
-                }, step=step)
+                wandb.log(
+                    {
+                        "validation/loss": val_loss_estimate,
+                        "validation/accuracy": val_accuracy_estimate,
+                        "progress/step": step,
+                    },
+                    step=step,
+                )
 
             model.train()
 
