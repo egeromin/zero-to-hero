@@ -413,8 +413,27 @@ def main():
             written_text = decoded
 
         sample = tokenizer.decode(tokens)
-        Path("generated-sample.txt").write_text(sample)
-        torch.save(model.state_dict(), "model-minigpt.pth")
+        path_generated_sample = "generated-sample.txt"
+        Path(path_generated_sample).write_text(sample)
+        model_path = "model-minigpt.pth"
+        torch.save(model.state_dict(), model_path)
+
+        # Log artifacts to w&B
+        model_artifact = wandb.Artifact(
+            name="trained-model",
+            type="model",
+            description="Final trained model, trained on {max_training_iterations} steps",
+        )
+        model_artifact.add_file(model_path)
+        wandb.log_artifact(model_artifact)
+
+        samples_artifact = wandb.Artifact(
+            name="Generated samples",
+            type="generations",
+            description=f"Generated sample of length {num_chars_to_sample}",
+        )
+        samples_artifact.add_file(path_generated_sample)
+        wandb.log_artifact(samples_artifact)
 
     dist.destroy_process_group()
 
