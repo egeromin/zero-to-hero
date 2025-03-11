@@ -333,14 +333,28 @@ def main():
     assert total_batch_size % (context_size * batch_size) == 0
     # tokenizer = Tokenizer.load(Path("tokenizer"))  # my own tokenizer
     tokenizer = tiktoken.get_encoding("gpt2")  # use tiktoken
-    loaders = dataloaders_from_corpus(
-        context_size=context_size,
-        tokenizer=tokenizer,
-        path_corpus=Path("tinyshakespeare.txt"),
-        batch_size=batch_size,
-        val_split=0.2,
-        ddp_rank=ddp_rank,
-        ddp_world_size=ddp_world_size,
+    loaders = TrainValDataloaders(
+        train=DataLoader(
+            files=[
+                Path(f"fineweb-edu/train-{i}.npy")
+                for i in range(1, 100)
+            ],
+            context_size=context_size,
+            batch_size=batch_size,
+            ddp_rank=ddp_rank,
+            ddp_world_size=ddp_world_size,
+            max_tokens_to_load=int(1e7),
+        ),
+        val=DataLoader(
+            files=[
+                Path("fineweb-edu/val-0.npy")
+            ],
+            context_size=context_size,
+            batch_size=batch_size,
+            ddp_rank=ddp_rank,
+            ddp_world_size=ddp_world_size,
+            max_tokens_to_load=int(1e7),
+        )
     )
     if master_process:
         print(
