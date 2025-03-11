@@ -4,3 +4,4 @@ tok500.*
 __pycache__/
 .python-version
 fineweb-edu/
+wandb/
