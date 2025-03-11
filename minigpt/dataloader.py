@@ -188,6 +188,10 @@ def main():
 def test_from_files():
     for ddp_rank, world_size in [
         (0, 1),
+        (0, 2),
+        (1, 2),
+        (2, 5),
+        (7, 16),
     ]:
         print(f"Testing with {ddp_rank=}, {world_size=}")
         dataloader = DataLoader(
@@ -207,16 +211,33 @@ def test_from_files():
             train_t, labels_t = next(dataloader_it)
             train += train_t.view(-1).tolist()
             labels += labels_t.view(-1).tolist()
-        train = train[:max_to_fetch]
-        labels = labels[:max_to_fetch]
+        expected_train = []
+        expected_labels = []
+        for i in range(max_to_fetch):
+            within_stride = i % dataloader.stride
+            if (
+                ddp_rank * dataloader.n_tokens_in_batch
+                <= within_stride
+                < (ddp_rank + 1) * dataloader.n_tokens_in_batch
+            ):
+                expected_train.append(i)
+                expected_labels.append(i + 1 if i < max_to_fetch - 1 else 0)
 
-        expected_train = list(range(max_to_fetch))
-        expected_labels = list(range(1, max_to_fetch)) + [0]
+        if (ddp_rank, world_size) == (0, 1):
+            # Sanity check
+            assert expected_train == list(range(max_to_fetch))
+            assert expected_labels == list(range(1, max_to_fetch)) + [0]
+
+        train = train[: len(expected_train)]
+        labels = labels[: len(expected_labels)]
+        assert len(train) == len(labels)
 
         # Print the first diff
         for i in range(len(train)):
             if train[i] != expected_train[i]:
-                print(f"{i}th position of 'train' is {train[i]} instead of {expected_train[i]}")
+                print(
+                    f"{i}th position of 'train' is {train[i]} instead of {expected_train[i]}"
+                )
                 break
 
         assert train == expected_train
@@ -224,12 +245,12 @@ def test_from_files():
         # Print the first diff
         for i in range(len(labels)):
             if labels[i] != expected_labels[i]:
-                print(f"{i}th position of 'labels' is {labels[i]} instead of {expected_labels[i]}")
+                print(
+                    f"{i}th position of 'labels' is {labels[i]} instead of {expected_labels[i]}"
+                )
                 break
 
         assert labels == expected_labels
-
-        # TODO: test with different values of world_size and ddp_rank
 
 
 if __name__ == "__main__":
