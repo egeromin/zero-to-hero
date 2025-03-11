@@ -186,41 +186,50 @@ def main():
 
 
 def test_from_files():
-    dataloader = DataLoader(
-        files=[Path(f"test-dataloader/batch_{i}.npy") for i in range(10)],
-        batch_size=16,
-        context_size=1024,
-        max_tokens_to_load=459812,
-        files_dtype=np.uint32,
-    )
-    train = []
-    labels = []
-    max_to_fetch = 1000000
-    dataloader_it = iter(dataloader)
-    while len(train) < max_to_fetch:
-        train_t, labels_t = next(dataloader_it)
-        train += train_t.view(-1).tolist()
-        labels += labels_t.view(-1).tolist()
-    train = train[:max_to_fetch]
-    labels = labels[:max_to_fetch]
+    for ddp_rank, world_size in [
+        (0, 1),
+    ]:
+        print(f"Testing with {ddp_rank=}, {world_size=}")
+        dataloader = DataLoader(
+            files=[Path(f"test-dataloader/batch_{i}.npy") for i in range(10)],
+            batch_size=16,
+            context_size=1024,
+            max_tokens_to_load=459812,
+            files_dtype=np.uint32,
+            ddp_world_size=world_size,
+            ddp_rank=ddp_rank,
+        )
+        train = []
+        labels = []
+        max_to_fetch = 1000000
+        dataloader_it = iter(dataloader)
+        while len(train) < max_to_fetch:
+            train_t, labels_t = next(dataloader_it)
+            train += train_t.view(-1).tolist()
+            labels += labels_t.view(-1).tolist()
+        train = train[:max_to_fetch]
+        labels = labels[:max_to_fetch]
 
-    # Print the first diff
-    for i in range(len(train)):
-        if train[i] != i:
-            print(f"{i}th position of 'train' is {train[i]}")
-            break
+        expected_train = list(range(max_to_fetch))
+        expected_labels = list(range(1, max_to_fetch)) + [0]
 
-    assert train == list(range(max_to_fetch))
+        # Print the first diff
+        for i in range(len(train)):
+            if train[i] != expected_train[i]:
+                print(f"{i}th position of 'train' is {train[i]} instead of {expected_train[i]}")
+                break
 
-    # Print the first diff
-    for i in range(len(labels)):
-        if labels[i] != i + 1:
-            print(f"{i}th position of 'labels' is {labels[i]}")
-            break
+        assert train == expected_train
 
-    assert labels == list(range(1, max_to_fetch)) + [0]
+        # Print the first diff
+        for i in range(len(labels)):
+            if labels[i] != expected_labels[i]:
+                print(f"{i}th position of 'labels' is {labels[i]} instead of {expected_labels[i]}")
+                break
 
-    # TODO: test with different values of world_size and ddp_rank
+        assert labels == expected_labels
+
+        # TODO: test with different values of world_size and ddp_rank
 
 
 if __name__ == "__main__":
