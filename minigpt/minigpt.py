@@ -392,8 +392,7 @@ def main():
     )
     model = MiniGPT(config)
     opt = initialize_optimizer(model)
-    # max_training_iterations = 8_001
-    max_training_iterations = 50
+    max_training_iterations = 19073
     model = train(model, loaders, opt, max_training_iterations, total_batch_size)
 
     if master_process:
@@ -474,9 +473,8 @@ def train(
 
     train_losses = []
     validation_losses = []
-    # measure_every = 100
-    measure_every = 10
-    warmup_steps = 10
+    measure_every = 100
+    warmup_steps = 715
     batch_size = loaders["train"].batch_size
 
     if total_batch_size is None:
