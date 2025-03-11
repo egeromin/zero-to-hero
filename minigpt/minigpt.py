@@ -87,8 +87,8 @@ def estimate_loss_and_accuracy(
     loader: DataLoader,
     num_runs: int = 20,
 ) -> tuple[float, float]:
-    losses = []
-    accuracies = []
+    mean_loss = 0.0
+    mean_accuracy = 0.0
     for _, (X_batch, Y_batch) in zip(range(num_runs), loader):
         X_batch = X_batch.to(device)
         Y_batch = Y_batch.to(device)
@@ -100,11 +100,11 @@ def estimate_loss_and_accuracy(
                 Y_batch.view(-1),
             )
         assert preds.shape == Y_batch.shape
-        accuracy = (preds == Y_batch).float().mean().item()
-        losses.append(loss.item())
-        accuracies.append(accuracy)
-    mean_loss = sum(losses) / len(losses)
-    mean_accuracy = sum(accuracies) / len(accuracies)
+        accuracy = (preds == Y_batch).float().mean()
+        mean_loss += loss.detach()
+        mean_accuracy += accuracy.detach()
+    mean_loss = mean_loss / num_runs
+    mean_accuracy = mean_accuracy / num_runs
     if using_ddp:
         dist.all_reduce(mean_loss, op=dist.ReduceOp.AVG)
         dist.all_reduce(mean_accuracy, op=dist.ReduceOp.AVG)
@@ -625,4 +625,5 @@ def train(
 
 
 if __name__ == "__main__":
+    # torchrun --standalone --nproc_per_node N minigpt.py
     main()
