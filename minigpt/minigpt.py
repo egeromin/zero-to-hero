@@ -38,6 +38,7 @@ import torch
 import torch.nn.functional as F
 import tqdm
 import matplotlib
+import wandb
 from matplotlib import pyplot as plt
 from torch import nn
 from torch.distributed import init_process_group
@@ -73,6 +74,13 @@ if using_ddp:
     master_process = ddp_rank == 0
 
 
+if master_process:
+    config = {
+        "ddp_world_size": ddp_world_size,
+    }
+    wandb.init(project="zero-to-hero", name="gpt2-fineweb-edu", config=config)
+
+
 @torch.no_grad()
 def estimate_loss_and_accuracy(
     model: nn.Module,
@@ -82,18 +90,24 @@ def estimate_loss_and_accuracy(
     losses = []
     accuracies = []
     for _, (X_batch, Y_batch) in zip(range(num_runs), loader):
-        logits = model.forward(X_batch)
-        preds = logits.argmax(dim=2)
-        loss = F.cross_entropy(
-            logits.view(-1, model.config.vocab_size),
-            Y_batch.view(-1),
-        )
+        X_batch = X_batch.to(device)
+        Y_batch = Y_batch.to(device)
+        with torch.autocast(device_type=device, dtype=torch.bfloat16):
+            logits = model.forward(X_batch)
+            preds = logits.argmax(dim=2)
+            loss = F.cross_entropy(
+                logits.view(-1, model.config.vocab_size),
+                Y_batch.view(-1),
+            )
         assert preds.shape == Y_batch.shape
         accuracy = (preds == Y_batch).float().mean().item()
         losses.append(loss.item())
         accuracies.append(accuracy)
     mean_loss = sum(losses) / len(losses)
     mean_accuracy = sum(accuracies) / len(accuracies)
+    if using_ddp:
+        dist.all_reduce(mean_loss, op=dist.ReduceOp.AVG)
+        dist.all_reduce(mean_accuracy, op=dist.ReduceOp.AVG)
     return mean_loss, mean_accuracy
 
 
@@ -443,7 +457,8 @@ def train(
 
     train_losses = []
     validation_losses = []
-    measure_every = 500
+    # measure_every = 100
+    measure_every = 10
     warmup_steps = 10
     batch_size = loaders["train"].batch_size
 
@@ -508,12 +523,22 @@ def train(
                 f"norm = {norm:.4f}, "
                 f"lr = {learning_rate:.6f}, "
             )
+            wandb.log({
+                "train/loss": loss_accum,
+                "train/learning_rate": learning_rate,
+                "train/norm": norm,
+                "performance/tokens_per_second": tok_ps,
+                "performance/batch_time_seconds": elapsed,
+                "progress/step": step,
+                "progress/tokens_processed": n_tok
+            }, step=step)
 
         if step % measure_every == 0:
             model.eval()
             val_loss_estimate, val_accuracy_estimate = estimate_loss_and_accuracy(
                 raw_model,
                 loaders["val"],
+                num_runs=32 // ddp_world_size,
             )
             validation_losses.append(val_loss_estimate)
             if master_process:
@@ -521,6 +546,12 @@ def train(
                     f"val loss = {val_loss_estimate:4f}, "
                     f"val accuracy = {val_accuracy_estimate * 100:.2f}%"
                 )
+                wandb.log({
+                    "validation/loss": val_loss_estimate,
+                    "validation/accuracy": val_accuracy_estimate,
+                    "progress/step": step,
+                }, step=step)
+
             model.train()
 
     if master_process:
