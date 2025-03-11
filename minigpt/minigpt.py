@@ -458,7 +458,7 @@ def train(
 
     train_loader_iter = iter(loaders["train"])
 
-    for i in tqdm.tqdm(range(max_training_iterations)):
+    for step in tqdm.tqdm(range(max_training_iterations)):
         start = time.time()
         opt.zero_grad()
         loss_accum = 0.0
@@ -488,7 +488,7 @@ def train(
         norm = torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
         train_losses.append(loss_accum)
         learning_rate = gpt2_learning_rate_schedule(
-            i, warmup_steps, max_training_iterations
+            step, warmup_steps, max_training_iterations
         )
         for param_group in opt.param_groups:
             param_group["lr"] = learning_rate
@@ -502,25 +502,27 @@ def train(
         train_loss_estimate = sum(train_losses[-20:]) / len(train_losses[-20:])
         if master_process:
             print(
-                f"\n{i}: train loss = {train_loss_estimate:4f}, "
+                f"\n{step}: train loss = {train_loss_estimate:4f}, "
                 f"time = {elapsed * 1000:.0f}ms, "
                 f"tok/s = {tok_ps:.0f}, "
                 f"norm = {norm:.4f}, "
                 f"lr = {learning_rate:.6f}, "
             )
 
-        # if i % measure_every == 0:
-        #     model.eval()
-        #     val_loss_estimate, val_accuracy_estimate = estimate_loss_and_accuracy(
-        #         raw_model,
-        #         loaders["val"],
-        #     )
-        #     validation_losses.append(val_loss_estimate)
-        #     print(
-        #         f"val loss = {val_loss_estimate:4f}, "
-        #         f"val accuracy = {val_accuracy_estimate * 100:.2f}%"
-        #     )
-        #     model.train()
+        if step % measure_every == 0:
+            model.eval()
+            val_loss_estimate, val_accuracy_estimate = estimate_loss_and_accuracy(
+                raw_model,
+                loaders["val"],
+            )
+            validation_losses.append(val_loss_estimate)
+            if master_process:
+                print(
+                    f"val loss = {val_loss_estimate:4f}, "
+                    f"val accuracy = {val_accuracy_estimate * 100:.2f}%"
+                )
+            model.train()
+
     if master_process:
         print(f"Number of parameters: {total_params // 1e6}M parameters")
     # Plot training and validation losses
