@@ -428,7 +428,7 @@ def main():
         wandb.log_artifact(model_artifact)
 
         samples_artifact = wandb.Artifact(
-            name="Generated samples",
+            name="generated-samples",
             type="generations",
             description=f"Generated sample of length {num_chars_to_sample}",
         )
