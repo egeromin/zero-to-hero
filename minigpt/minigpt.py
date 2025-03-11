@@ -468,7 +468,11 @@ def train(
 
     train_loader_iter = iter(loaders["train"])
 
-    for step in tqdm.tqdm(range(max_training_iterations)):
+    iterable = range(max_training_iterations)
+    if master_process:
+        iterable = tqdm.tqdm(iterable, total=max_training_iterations)
+
+    for step in iterable:
         start = time.time()
         opt.zero_grad()
         loss_accum = 0.0
@@ -509,15 +513,15 @@ def train(
         n_tok = X_batch.shape[0] * X_batch.shape[1] * grad_accum_steps * ddp_world_size
         tok_ps = n_tok / elapsed
 
-        train_loss_estimate = sum(train_losses[-20:]) / len(train_losses[-20:])
         if master_process:
-            print(
-                f"\n{step}: train loss = {train_loss_estimate:4f}, "
-                f"time = {elapsed * 1000:.0f}ms, "
-                f"tok/s = {tok_ps:.0f}, "
-                f"norm = {norm:.4f}, "
-                f"lr = {learning_rate:.6f}, "
-            )
+            # train_loss_estimate = sum(train_losses[-20:]) / len(train_losses[-20:])
+            # print(
+            #     f"\n{step}: train loss = {train_loss_estimate:4f}, "
+            #     f"time = {elapsed * 1000:.0f}ms, "
+            #     f"tok/s = {tok_ps:.0f}, "
+            #     f"norm = {norm:.4f}, "
+            #     f"lr = {learning_rate:.6f}, "
+            # )
             wandb.log(
                 {
                     "train/loss": loss_accum,
@@ -540,10 +544,10 @@ def train(
             )
             validation_losses.append(val_loss_estimate)
             if master_process:
-                print(
-                    f"val loss = {val_loss_estimate:4f}, "
-                    f"val accuracy = {val_accuracy_estimate * 100:.2f}%"
-                )
+                # print(
+                #     f"val loss = {val_loss_estimate:4f}, "
+                #     f"val accuracy = {val_accuracy_estimate * 100:.2f}%"
+                # )
                 wandb.log(
                     {
                         "validation/loss": val_loss_estimate,
