@@ -611,7 +611,7 @@ def train(
         plt.show()
     else:
         plt.savefig("training-plots.png", dpi=300)
-    return model
+    return raw_model
 
 
 # def test_works_after_refactor():
