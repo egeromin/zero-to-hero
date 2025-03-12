@@ -23,7 +23,7 @@ def encode_doc(doc: dict) -> list[int]:
     tokenizer = get_tokenizer()
     eot = tokenizer._special_tokens["<|endoftext|>"]
     tokens = [eot]
-    tokens.extend(tokenizer.encode(doc["text"]))
+    tokens.extend(tokenizer.encode_ordinary(doc["text"]))
     return tokens
 
 
@@ -49,9 +49,9 @@ def download_dataset():
     remaining_tokens = []
     file_shard = (dataset_dir / "val-0.npy").open("wb")
 
-    num_processes = 2 * cpu_count()
+    num_processes = cpu_count()
     with Pool(processes=num_processes) as pool:
-        for tokens in pool.imap(encode_doc, fw, chunksize=16):
+        for tokens in pool.imap(encode_doc, fw, chunksize=32):
             tokens = remaining_tokens + tokens
             remaining_capacity = max_tokens_per_shard - num_tokens_in_shard
             remaining_tokens = tokens[remaining_capacity:]
