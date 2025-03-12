@@ -343,7 +343,7 @@ def main():
         print("Loading dataset...")
     total_batch_size = 524288
     context_size = 1024
-    batch_size = 16
+    batch_size = 64
     assert total_batch_size % (context_size * batch_size) == 0
     # tokenizer = Tokenizer.load(Path("tokenizer"))  # my own tokenizer
     tokenizer = tiktoken.get_encoding("gpt2")  # use tiktoken
