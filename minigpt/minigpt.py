@@ -320,7 +320,7 @@ def gpt2_learning_rate_schedule(
     max_lr = 6e-4
     min_lr = max_lr * 0.1
     if step < warmup_steps:
-        return max_lr * (step + 1 / warmup_steps)
+        return max_lr * (step + 1) / warmup_steps
     if step > max_training_iterations:
         return min_lr
 
