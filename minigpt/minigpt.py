@@ -349,7 +349,7 @@ def main():
     tokenizer = tiktoken.get_encoding("gpt2")  # use tiktoken
     loaders = TrainValDataloaders(
         train=DataLoader(
-            files=[Path(f"fineweb-edu/train-{i}.npy") for i in range(1, 100)],
+            files=sorted(Path("fineweb-edu").glob("train-*.npy")),
             context_size=context_size,
             batch_size=batch_size,
             ddp_rank=ddp_rank,
