@@ -62,7 +62,7 @@ if using_cuda:
     torch.cuda.manual_seed(1337)
     matplotlib.use("Agg")
     torch.set_float32_matmul_precision("high")
-using_ddp = int(env.get("RANK", -1)) != "-1"
+using_ddp = int(env.get("RANK", -1)) != -1
 if using_ddp:
     assert using_cuda
     init_process_group(backend="nccl")
@@ -646,6 +646,23 @@ def train(
 #     sample = tokenizer.decode(sampled_tokens)
 #     print(prompt + sample)
 #     print("OK, sampling successful.")
+
+
+def double_check_learning_rate():
+    max_training_iterations = 19073
+    warmup_steps = 715
+    plt.plot(
+        list(range(max_training_iterations)),
+        [
+            gpt2_learning_rate_schedule(
+                step=step,
+                max_training_iterations=max_training_iterations,
+                warmup_steps=warmup_steps,
+            )
+            for step in range(max_training_iterations)
+        ],
+    )
+    plt.show()
 
 
 if __name__ == "__main__":
