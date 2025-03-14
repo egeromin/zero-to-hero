@@ -51,7 +51,7 @@ def download_dataset():
 
     num_processes = cpu_count()
     with Pool(processes=num_processes) as pool:
-        for tokens in pool.imap(encode_doc, fw, chunksize=32):
+        for tokens in pool.imap(encode_doc, fw, chunksize=num_processes * 2):
             tokens = remaining_tokens + tokens
             remaining_capacity = max_tokens_per_shard - num_tokens_in_shard
             remaining_tokens = tokens[remaining_capacity:]
