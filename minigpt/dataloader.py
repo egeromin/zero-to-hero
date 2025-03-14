@@ -21,7 +21,7 @@ class DataLoader:
         ddp_world_size: int = 1,
         files: list[Path] | None = None,
         max_tokens_to_load: int | None = None,
-        files_dtype: np.dtype = np.uint16,
+        files_dtype: np.dtype | str = "<u2",
     ):
         if tokens is None and files is None:
             raise ValueError("One of `tokens` or `files` must be provided.")
@@ -199,7 +199,7 @@ def test_from_files():
             batch_size=16,
             context_size=1024,
             max_tokens_to_load=459812,
-            files_dtype=np.uint32,
+            files_dtype="<u2",
             ddp_world_size=world_size,
             ddp_rank=ddp_rank,
         )

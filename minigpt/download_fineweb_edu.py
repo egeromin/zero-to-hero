@@ -28,7 +28,7 @@ def encode_doc(doc: dict) -> list[int]:
 
 
 def save_tokens(tokens: list[int], file: io.FileIO):
-    tokens_np = np.array(tokens, dtype=np.uint16)
+    tokens_np = np.array(tokens, dtype="<u2")
     tokens_np.tofile(file)
 
 
