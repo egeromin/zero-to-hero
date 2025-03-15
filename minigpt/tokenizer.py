@@ -48,6 +48,11 @@ class Tokenizer:
     def vocab_size(self) -> int:
         return len(self.vocab)
 
+    @property
+    def n_vocab(self) -> int:
+        # For compatibility with tiktoken
+        return self.vocab_size
+
     def save(self, target_dir: Path):
         if not target_dir.exists():
             target_dir.mkdir()

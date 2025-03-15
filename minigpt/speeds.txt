@@ -1,0 +1,38 @@
+Baseline
+49: train loss = 6.156622, time = 981ms, tok/s = 16701
+
+Using TF32
+49: train loss = 6.157476, time = 370ms, tok/s = 44269
+
+On a faster machine - higher memory bandwidth
+49: train loss = 6.157435, time = 334ms, tok/s = 48985
+
+With bfloat16
+49: train loss = 6.156698, time = 312ms, tok/s = 52594
+
+With torch.compile
+49: train loss = 6.177520, time = 157ms, tok/s = 104288
+
+With flash attention
+49: train loss = 6.215732, time = 121ms, tok/s = 135158
+
+Using a nice number as vocab_size=50304
+49: train loss = 6.212791, time = 105ms, tok/s = 156257
+
+Benchmark on a slower machine
+49: train loss = 6.023496, time = 373ms, tok/s = 43949, norm = 0.4335
+
+with learning rate scheduler
+49: train loss = 6.431539, time = 374ms, tok/s = 43864, norm = 0.3091
+
+fused AdamW
+49: train loss = 6.432898, time = 368ms, tok/s = 44572, norm = 0.3134, lr = 0.000061,
+
+using gradient accumulation * 32
+4: train loss = 9.256497, time = 11614ms, tok/s = 45142, norm = 2.2987, lr = 0.002460,
+
+new benchmark on new machine - grad accum * 32
+3: train loss = 9.711056, time = 2930ms, tok/s = 178957, norm = 18.3870, lr = 0.001860,
+
+with DDP on 2 GPUs
+26: train loss = 6.490913, time = 1515ms, tok/s = 346088, norm = 0.4315, lr = 0.000413,
