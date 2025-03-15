@@ -520,8 +520,6 @@ def save_checkpoint(model, optimizer, step, loss):
     )
     artifact.add_file(filepath)
     wandb.log_artifact(artifact)
-    print(f"Logging artifact {wandb_checkpoint_name} to wandb, waiting to finish...")
-    artifact.wait()
     print(f"Succesfully logged artifact {wandb_checkpoint_name}")
 
     # Deleting all previous artifacts
