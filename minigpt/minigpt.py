@@ -377,9 +377,9 @@ def main():
     if master_process:
         print(f"Device: {device}")
         print("Loading dataset...")
-    total_batch_size = 524288
+    total_batch_size = 524288 // 16  # TODO REMOVE //16!!!!
     context_size = 1024
-    batch_size = 64
+    batch_size = 8  # TODO make batch size 64 again!!!
     assert total_batch_size % (context_size * batch_size) == 0
     # tokenizer = Tokenizer.load(Path("tokenizer"))  # my own tokenizer
     tokenizer = tiktoken.get_encoding("gpt2")  # use tiktoken
@@ -489,6 +489,41 @@ def initialize_optimizer(model: MiniGPT) -> torch.optim.Optimizer:
     return opt
 
 
+def save_checkpoint(model, optimizer, step, loss):
+    # Save the model checkpoint. Delete all previous checkpoints to save storage
+    # on wandb. Also, assuming that this code is running only inside the master
+    # process, so not guarding any print statements.
+    checkpoints_dir = Path("checkpoints")
+    checkpoints_dir.mkdir(parents=True, exist_ok=True)
+    latest_checkpoint = checkpoints_dir / "checkpoint-latest.pth"
+    if latest_checkpoint.exists():
+        latest_checkpoint.unlink()
+    filepath = str(latest_checkpoint)
+    checkpoint = {
+        "step": step,
+        "model_state_dict": model.state_dict(),
+        "optimizer_state_dict": optimizer.state_dict(),
+        "loss": loss,
+    }
+    torch.save(checkpoint, filepath)
+    print(f"Saved latest checkpoint at step {step} to {filepath}")
+    wandb_checkpoint_name = f"model-checkpoint-step-{step}"
+    artifact = wandb.Artifact(
+        name=wandb_checkpoint_name,
+        type="model",
+        description=f"Model checkpoint at epoch {step} with loss {loss:.4f}",
+    )
+    artifact.add_file(filepath)
+    wandb.log_artifact(artifact)
+    print(f"Succesfully logged artifact {wandb_checkpoint_name}")
+
+    # Deleting all previous artifacts
+    for prev_artifact in wandb.run.logged_artifacts():
+        if prev_artifact.name != wandb_checkpoint_name:
+            prev_artifact.delete(delete_aliases=True)
+            print(f"Deleted previous checkpoint: {prev_artifact.name}")
+
+
 def train(
     model: MiniGPT,
     loaders: TrainValDataloaders,
@@ -515,6 +550,7 @@ def train(
     train_losses = []
     validation_losses = []
     measure_every = 100
+    checkpoint_every = 1  # TODO make this a sane value, e.g. 250!
     warmup_steps = 715
     batch_size = loaders["train"].batch_size
 
@@ -572,7 +608,10 @@ def train(
         for param_group in opt.param_groups:
             param_group["lr"] = learning_rate
         opt.step()
-        torch.cuda.synchronize()
+        if using_cuda:
+            torch.cuda.synchronize()
+        elif device == "mps":
+            torch.mps.synchronize()
         end = time.time()
         elapsed = end - start
         n_tok = X_batch.shape[0] * X_batch.shape[1] * grad_accum_steps * ddp_world_size
@@ -599,6 +638,9 @@ def train(
                 },
                 step=step,
             )
+
+            if step % checkpoint_every == 0:
+                save_checkpoint(model, opt, step, loss_accum)
 
         if step % measure_every == 0:
             model.eval()
