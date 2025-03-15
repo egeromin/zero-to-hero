@@ -377,9 +377,9 @@ def main():
     if master_process:
         print(f"Device: {device}")
         print("Loading dataset...")
-    total_batch_size = 524288 // 16  # TODO REMOVE //16!!!!
+    total_batch_size = 524288
     context_size = 1024
-    batch_size = 8  # TODO make batch size 64 again!!!
+    batch_size = 64
     assert total_batch_size % (context_size * batch_size) == 0
     # tokenizer = Tokenizer.load(Path("tokenizer"))  # my own tokenizer
     tokenizer = tiktoken.get_encoding("gpt2")  # use tiktoken
@@ -433,7 +433,8 @@ def main():
 
     if master_process:
         model.eval()
-        start_ctx = tokenizer.encode("I'm a language model,")
+        start_str = "I'm a language model,"
+        start_ctx = tokenizer.encode(start_str)
         tokens = []
         tokens.extend(start_ctx)
 
@@ -449,15 +450,15 @@ def main():
 
         sample = tokenizer.decode(tokens)
         path_generated_sample = "generated-sample.txt"
-        Path(path_generated_sample).write_text(sample)
-        model_path = "model-minigpt.pth"
+        Path(path_generated_sample).write_text(start_str + sample)
+        model_path = "model-gpt-2.pth"
         torch.save(model.state_dict(), model_path)
 
         # Log artifacts to w&B
         model_artifact = wandb.Artifact(
             name="trained-model",
             type="model",
-            description="Final trained model, trained on {max_training_iterations} steps",
+            description=f"Final trained model, trained on {max_training_iterations} steps",
         )
         model_artifact.add_file(model_path)
         wandb.log_artifact(model_artifact)
@@ -469,6 +470,9 @@ def main():
         )
         samples_artifact.add_file(path_generated_sample)
         wandb.log_artifact(samples_artifact)
+        print("Logging artifacts to wandb, waiting to finish...")
+        wandb.finish()
+        print("Done.")
 
     dist.destroy_process_group()
 
@@ -495,9 +499,10 @@ def save_checkpoint(model, optimizer, step, loss):
     # process, so not guarding any print statements.
     checkpoints_dir = Path("checkpoints")
     checkpoints_dir.mkdir(parents=True, exist_ok=True)
-    latest_checkpoint = checkpoints_dir / "checkpoint-latest.pth"
-    if latest_checkpoint.exists():
-        latest_checkpoint.unlink()
+    latest_checkpoint = checkpoints_dir / f"checkpoint-step-{step}.pth"
+    previous_checkpoint = checkpoints_dir / f"checkpoint-step-{step - 1}.pth"
+    if previous_checkpoint.exists():
+        previous_checkpoint.unlink()
     filepath = str(latest_checkpoint)
     checkpoint = {
         "step": step,
@@ -515,10 +520,15 @@ def save_checkpoint(model, optimizer, step, loss):
     )
     artifact.add_file(filepath)
     wandb.log_artifact(artifact)
+    print(f"Logging artifact {wandb_checkpoint_name} to wandb, waiting to finish...")
+    artifact.wait()
     print(f"Succesfully logged artifact {wandb_checkpoint_name}")
 
     # Deleting all previous artifacts
-    for prev_artifact in wandb.run.logged_artifacts():
+    run = wandb.run
+    api = wandb.Api()
+    api_run = api.run(f"{run.entity}/{run.project}/{run.id}")
+    for prev_artifact in api_run.logged_artifacts():
         if prev_artifact.name != wandb_checkpoint_name:
             prev_artifact.delete(delete_aliases=True)
             print(f"Deleted previous checkpoint: {prev_artifact.name}")
@@ -550,7 +560,7 @@ def train(
     train_losses = []
     validation_losses = []
     measure_every = 100
-    checkpoint_every = 1  # TODO make this a sane value, e.g. 250!
+    checkpoint_every = 250
     warmup_steps = 715
     batch_size = loaders["train"].batch_size
 
@@ -669,33 +679,33 @@ def train(
     if master_process:
         print(f"Number of parameters: {total_params // 1e6}M parameters")
     # Plot training and validation losses
-    fig, axes = plt.subplots(nrows=2, ncols=1, figsize=(4, 8))
-    average_every = 20
-    remainder = len(train_losses) % average_every
-    average_train_losses = (
-        torch.tensor(train_losses[:-remainder]).view(-1, average_every).mean(dim=1)
-    )
-    train_losses_log10 = [math.log10(e) for e in average_train_losses]
-    axes[0].plot(
-        [i * average_every for i in range(len(average_train_losses))],
-        train_losses_log10,
-    )
-    axes[0].set_xlabel("Training iteration")
-    axes[0].set_ylabel("Log10 Train loss")
-    axes[0].set_title("Log10 training losses during the training")
-
-    val_losses_log10 = [math.log10(e) for e in validation_losses]
-    val_iteration = [i * measure_every for i in range(len(validation_losses))]
-    axes[1].plot(val_iteration, val_losses_log10)
-    axes[1].set_xlabel("Training iteration")
-    axes[1].set_ylabel("Log10 Validation loss")
-    axes[1].set_title("Log10 validation losses during the training")
-    plt.tight_layout()
-
-    if device != "cuda":
-        plt.show()
-    else:
-        plt.savefig("training-plots.png", dpi=300)
+    # fig, axes = plt.subplots(nrows=2, ncols=1, figsize=(4, 8))
+    # average_every = 20
+    # remainder = len(train_losses) % average_every
+    # average_train_losses = (
+    #     torch.tensor(train_losses[:-remainder]).view(-1, average_every).mean(dim=1)
+    # )
+    # train_losses_log10 = [math.log10(e) for e in average_train_losses]
+    # axes[0].plot(
+    #     [i * average_every for i in range(len(average_train_losses))],
+    #     train_losses_log10,
+    # )
+    # axes[0].set_xlabel("Training iteration")
+    # axes[0].set_ylabel("Log10 Train loss")
+    # axes[0].set_title("Log10 training losses during the training")
+    #
+    # val_losses_log10 = [math.log10(e) for e in validation_losses]
+    # val_iteration = [i * measure_every for i in range(len(validation_losses))]
+    # axes[1].plot(val_iteration, val_losses_log10)
+    # axes[1].set_xlabel("Training iteration")
+    # axes[1].set_ylabel("Log10 Validation loss")
+    # axes[1].set_title("Log10 validation losses during the training")
+    # plt.tight_layout()
+    #
+    # if device != "cuda":
+    #     plt.show()
+    # else:
+    #     plt.savefig("training-plots.png", dpi=300)
     return raw_model
 
 
