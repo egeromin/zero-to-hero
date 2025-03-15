@@ -25,6 +25,7 @@ To-do list:
 14. Train N iterations on GPU  ✅
 """
 
+import contextlib
 import math
 import sys
 import time
@@ -57,14 +58,21 @@ ddp_rank = 0
 ddp_local_rank = 0
 ddp_world_size = 1
 master_process = True
+bf16_supported = False
+using_flash_attention = False
+use_torch_compile = False
 if using_cuda:
     device = "cuda"
     torch.cuda.manual_seed(1337)
     matplotlib.use("Agg")
     torch.set_float32_matmul_precision("high")
+    using_flash_attention = True
+    use_torch_compile = True
 using_ddp = int(env.get("RANK", -1)) != -1
 if using_ddp:
     assert using_cuda
+    if master_process:
+        print("Using DDP")
     init_process_group(backend="nccl")
     ddp_rank = int(env["RANK"])
     ddp_local_rank = int(env["LOCAL_RANK"])
@@ -72,13 +80,37 @@ if using_ddp:
     device = f"cuda:{ddp_local_rank}"
     torch.cuda.set_device(device)
     master_process = ddp_rank == 0
+if not using_cuda:
+    if master_process:
+        print("CUDA not available, checking if I can run on apple silicon")
+    if torch.backends.mps.is_available():
+        device = "mps"
+        if master_process:
+            print("Running on apple silicon (device=mps)")
+    else:
+        if master_process:
+            print("MPS not available, running on CPU")
 
+if torch.cuda.is_bf16_supported(including_emulation=False):
+    bf16_supported = True
 
 if master_process:
     config = {
         "ddp_world_size": ddp_world_size,
     }
     wandb.init(project="zero-to-hero", name="gpt2-fineweb-edu", config=config)
+    if bf16_supported:
+        print("Using bfloat16")
+    else:
+        print("Not using bfloat16")
+    if using_flash_attention:
+        print("Using flash attention")
+    else:
+        print("Not using flash attention")
+    if use_torch_compile:
+        print("Using torch compile")
+    else:
+        print("Not using torch compile")
 
 
 @torch.no_grad()
@@ -92,7 +124,11 @@ def estimate_loss_and_accuracy(
     for _, (X_batch, Y_batch) in zip(range(num_runs), loader):
         X_batch = X_batch.to(device)
         Y_batch = Y_batch.to(device)
-        with torch.autocast(device_type=device, dtype=torch.bfloat16):
+        with (
+            torch.autocast(device_type=device, dtype=torch.bfloat16)
+            if bf16_supported
+            else contextlib.nullcontext()
+        ):
             logits = model.forward(X_batch)
             preds = logits.argmax(dim=2)
             loss = F.cross_entropy(
@@ -384,7 +420,7 @@ def main():
         head_size=768 // 12,
         num_heads=12,
         num_blocks=12,
-        use_flash_attention=True,
+        use_flash_attention=using_flash_attention,
         attention_bias=True,
         final_layer_bias=False,
         final_layer_norm=True,
@@ -461,7 +497,12 @@ def train(
     total_batch_size: int | None = None,
 ):
     model.to(device)
-    model = torch.compile(model)
+    if use_torch_compile:
+        if master_process:
+            print("Compiling model using torch.compile")
+        model = torch.compile(model)
+    else:
+        model = model
     raw_model = model
     if using_ddp:
         model = DDP(model, device_ids=[ddp_local_rank])
@@ -501,7 +542,11 @@ def train(
             assert X_batch.shape == Y_batch.shape
             X_batch, Y_batch = X_batch.to(device), Y_batch.to(device)
 
-            with torch.autocast(device_type=device, dtype=torch.bfloat16):
+            with (
+                torch.autocast(device_type=device, dtype=torch.bfloat16)
+                if bf16_supported
+                else contextlib.nullcontext()
+            ):
                 if using_ddp:
                     # Synchronize gradients only for the last step in the gradient accumulation
                     model.require_backward_grad_sync = j == grad_accum_steps - 1
