@@ -560,7 +560,7 @@ def train(
     train_losses = []
     validation_losses = []
     measure_every = 100
-    checkpoint_every = 1
+    checkpoint_every = 250
     warmup_steps = 715
     batch_size = loaders["train"].batch_size
 
