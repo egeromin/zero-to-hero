@@ -529,7 +529,7 @@ def save_checkpoint(model, optimizer, step, loss):
     api = wandb.Api()
     api_run = api.run(f"{run.entity}/{run.project}/{run.id}")
     for prev_artifact in api_run.logged_artifacts():
-        if prev_artifact.name != wandb_checkpoint_name:
+        if not prev_artifact.name.startswith(wandb_checkpoint_name):
             prev_artifact.delete(delete_aliases=True)
             print(f"Deleted previous checkpoint: {prev_artifact.name}")
 
